@@ -6,10 +6,15 @@
 A modern web application to scan and detect phishing URLs. Built with Next.js, TypeScript, and Tailwind CSS.
 
 ## Features
-- Scan URLs for phishing threats
+- Scan URLs for phishing threats (powered by [VirusTotal API](https://docs.virustotal.com/docs/api-overview))
 - Security policy API
 - Responsive UI with modern components
 - Built with Next.js, React, and Tailwind CSS
+
+
+## API
+
+This project uses the [VirusTotal API](https://docs.virustotal.com/docs/api-overview) to scan and analyze URLs for phishing and malicious content.
 
 ## Getting Started
 
