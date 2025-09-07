@@ -414,7 +414,7 @@ export default function Home() {
           {/* Footer */}
           <div className="text-center mt-8 pt-8 border-t border-gray-200 dark:border-gray-700 animate-fade-in space-y-3">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Made by Debasis Biswas | forensic@debasisbiswas.me
+              Made by Debasis Biswas | contact@debasisbiswas.me
             </p>
             <div className="text-xs text-gray-500 dark:text-gray-500 max-w-lg mx-auto leading-relaxed">
               <p className="mb-2">
