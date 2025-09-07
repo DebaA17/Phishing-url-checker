@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+
+# Security
+Disallow: /api/
+Disallow: /.well-known/
