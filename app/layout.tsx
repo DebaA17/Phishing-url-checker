@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description:
     "Advanced AI-powered phishing URL scanner using VirusTotal API. Analyze URLs for potential threats, malware, and phishing attempts.",
   keywords: "phishing, URL scanner, security, malware detection, VirusTotal, cybersecurity",
-  authors: [{ name: "Debasis Biswas", email: "forensic@debasisbiswas.me" }],
+  authors: [{ name: "Debasis Biswas", email: "contact@debasisbiswas.me" }],
   creator: "Debasis Biswas",
   publisher: "Debasis Biswas",
   robots: "index, follow",
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     apple: "/favicon.png",
   },
   viewport: "width=device-width, initial-scale=1, maximum-scale=1",
-    generator: 'v0.app'
+    
 }
 
 export default function RootLayout({
