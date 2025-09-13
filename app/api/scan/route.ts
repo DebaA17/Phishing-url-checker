@@ -1,5 +1,44 @@
 import { type NextRequest, NextResponse } from "next/server"
 
+
+// SSRF protection helper
+function isSafePublicDomain(hostname: string): boolean {
+  // Block localhost, internal, and direct IP addresses
+  const forbidden = [
+    "localhost",
+    "127.0.0.1",
+    "::1",
+  ];
+  if (forbidden.includes(hostname)) return false;
+  // Block IPv4/IPv6 addresses (private ranges)
+  // IPv4 regex
+  const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+  if (ipv4.test(hostname)) {
+    const parts = hostname.split('.').map(Number);
+    // private ranges: 10.x, 192.168.x, 172.16-31.x
+    if (
+      parts[0] === 10 ||
+      (parts[0] === 192 && parts[1] === 168) ||
+      (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31)
+    ) {
+      return false;
+    }
+    // loopback
+    if (parts[0] === 127) return false;
+    // else, allow global IPv4 addresses (rare for domains, but could be ok)
+  }
+  // IPv6 check
+  if (/^[a-fA-F0-9:]+$/.test(hostname) && hostname.includes(':')) return false;
+  // Basic domain name pattern (disallows single-label, TLD only, and underscores)
+  if (
+    !/^(?!\-)(?:[a-zA-Z0-9\-]{1,63}\.)+[a-zA-Z]{2,63}$/.test(hostname)
+  ) {
+    return false;
+  }
+  // If we got here, it's probably a public domain name
+  return true;
+}
+
 interface VirusTotalResponse {
   response_code: number
   verbose_msg: string
@@ -46,6 +85,12 @@ async function getRDAPInfo(domain: string): Promise<RDAPResponse | null> {
     // Extract domain from URL
     const urlObj = new URL(domain.startsWith("http") ? domain : `https://${domain}`)
     const hostname = urlObj.hostname
+
+    // SSRF protection: Only allow public DNS hostnames, block internal IPs/hosts.
+    if (!isSafePublicDomain(hostname)) {
+      console.warn(`Blocked potential SSRF: unsafe domain ${hostname}`)
+      return null // or optionally return { error: "Unsafe or internal domain" }
+    }
 
     console.log(`Getting RDAP info for domain: ${hostname}`)
 
