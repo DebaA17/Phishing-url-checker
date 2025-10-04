@@ -1,6 +1,8 @@
 
 # Phishing URL Checker
 
+![Demo](demo.png)
+
 **Live Demo:** [urlcheck.debasisbiswas.me](https://urlcheck.debasisbiswas.me)
 
 A modern web application to scan and detect phishing URLs. Built with Next.js, TypeScript, and Tailwind CSS.
