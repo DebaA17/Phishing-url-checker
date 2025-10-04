@@ -431,6 +431,14 @@ export default function Home() {
                   VirusTotal API Documentation
                 </a>
               </p>
+              <p>
+                <a
+                  href="/privacy-policy"
+                  className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline transition-colors duration-200"
+                >
+                  Privacy Policy
+                </a>
+              </p>
             </div>
           </div>
         </div>
