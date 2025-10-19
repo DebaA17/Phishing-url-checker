@@ -64,6 +64,8 @@ This project uses the [VirusTotal API](https://docs.virustotal.com/docs/api-over
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
+<a href="https://www.buymeacoffee.com/debasisbiswas" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
+
 ---
 
 Made with ❤️ by DEBASIS
