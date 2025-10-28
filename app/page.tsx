@@ -184,7 +184,19 @@ export default function Home() {
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto">
           {/* Theme Toggle */}
-          <div className="flex justify-end mb-4">
+          <div className="flex justify-end items-center gap-2 mb-4">
+            <a
+              href="https://buymeacoffee.com/debasisbiswas"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center rounded-full bg-pink-100 dark:bg-pink-200 hover:bg-pink-200 dark:hover:bg-pink-300 text-pink-600 dark:text-pink-700 shadow transition-colors duration-200 w-8 h-8 focus:outline-none focus:ring-2 focus:ring-pink-300"
+              title="Sponsor on Buy Me a Coffee"
+              aria-label="Sponsor on Buy Me a Coffee"
+            >
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                <path d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" />
+              </svg>
+            </a>
             <Button
               variant="outline"
               size="icon"
