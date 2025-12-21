@@ -46,7 +46,7 @@
     "geist": "^1.5.1",
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",
-    "next": "16.0.10",
+    "next": "16.1.0",
     "next-themes": "latest",
     "react": "^19.2.3",
     "react-day-picker": "9.8.0",
@@ -69,5 +69,6 @@
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.19",
     "typescript": "^5.9.3"
-  }
+  },
+  "packageManager": "pnpm@10.26.1+sha512.664074abc367d2c9324fdc18037097ce0a8f126034160f709928e9e9f95d98714347044e5c3164d65bd5da6c59c6be362b107546292a8eecb7999196e5ce58fa"
 }
