@@ -51,7 +51,7 @@
     "react": "^19.2.3",
     "react-day-picker": "9.8.0",
     "react-dom": "^19.2.3",
-    "react-hook-form": "^7.68.0",
+    "react-hook-form": "^7.69.0",
     "react-resizable-panels": "^2.1.9",
     "recharts": "2.15.0",
     "sonner": "^1.7.4",
@@ -62,10 +62,10 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
-    "@types/node": "^22.19.2",
+    "@types/node": "^22.19.3",
     "@types/react": "^18.3.27",
     "@types/react-dom": "^18.3.7",
-    "autoprefixer": "^10.4.22",
+    "autoprefixer": "^10.4.23",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.19",
     "typescript": "^5.9.3"
