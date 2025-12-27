@@ -49,6 +49,7 @@
     "next": "16.1.1",
     "next-themes": "latest",
     "react": "^19.2.3",
+    "react-confetti": "^6.4.0",
     "react-day-picker": "9.8.0",
     "react-dom": "^19.2.3",
     "react-hook-form": "^7.69.0",
