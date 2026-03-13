@@ -62,6 +62,11 @@ interface RDAPResponse {
   organization: string
 }
 
+interface TurnstileVerificationResponse {
+  success: boolean
+  "error-codes"?: string[]
+}
+
 // Add timeout wrapper for fetch requests
 async function fetchWithTimeout(url: string, options: any = {}, timeout = 10000) {
   const controller = new AbortController()
@@ -133,7 +138,8 @@ async function getRDAPInfo(domain: string): Promise<RDAPResponse | null> {
           return parseRDAPData(directData, hostname)
         }
       } catch (directError) {
-        console.warn("Direct RDAP API also failed:", directError.message)
+        const directErrorMessage = directError instanceof Error ? directError.message : String(directError)
+        console.warn("Direct RDAP API also failed:", directErrorMessage)
       }
 
       // If both fail, return basic info
@@ -371,12 +377,50 @@ function formatScanDate(dateString: string): string {
   }
 }
 
+async function verifyTurnstileToken(secret: string, token: string, remoteip?: string): Promise<boolean> {
+  const body = new URLSearchParams({
+    secret,
+    response: token,
+  })
+
+  if (remoteip) {
+    body.append("remoteip", remoteip)
+  }
+
+  const response = await fetchWithTimeout(
+    "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+    },
+    10000,
+  )
+
+  if (!response.ok) {
+    throw new Error("Turnstile verification request failed")
+  }
+
+  const data: TurnstileVerificationResponse = await response.json()
+  if (!data.success) {
+    console.warn("Turnstile verification failed:", data["error-codes"] || [])
+  }
+
+  return data.success
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { url } = await request.json()
+    const { url, turnstileToken } = await request.json()
 
     if (!url) {
       return NextResponse.json({ error: "URL is required" }, { status: 400 })
+    }
+
+    if (!turnstileToken) {
+      return NextResponse.json({ error: "Turnstile token is required" }, { status: 400 })
     }
 
     // Validate URL format
@@ -387,14 +431,29 @@ export async function POST(request: NextRequest) {
     }
 
     const apiKey = process.env.VIRUSTOTAL_API_KEY
+    const turnstileSecret = process.env.TURNSTILE_SECRET_KEY
 
     if (!apiKey) {
       return NextResponse.json({ error: "VirusTotal API key not configured" }, { status: 500 })
     }
 
+    if (!turnstileSecret) {
+      return NextResponse.json({ error: "Turnstile secret key not configured" }, { status: 500 })
+    }
+
     // Get client information for logging
     const clientIP = getClientIP(request)
     const userAgent = request.headers.get("user-agent") || "unknown"
+
+    const isTurnstileValid = await verifyTurnstileToken(
+      turnstileSecret,
+      turnstileToken,
+      clientIP !== "unknown" ? clientIP : undefined,
+    )
+
+    if (!isTurnstileValid) {
+      return NextResponse.json({ error: "Turnstile verification failed. Please try again." }, { status: 403 })
+    }
 
     console.log(`Scan request from IP: ${clientIP}, User-Agent: ${userAgent}`)
 

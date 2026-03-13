@@ -2,12 +2,23 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
+import Script from "next/script"
 import { Shield, AlertTriangle, CheckCircle, XCircle, Loader2, Search, Globe, Moon, Sun } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (container: string | HTMLElement, options: Record<string, unknown>) => string
+      reset: (widgetId?: string) => void
+      remove?: (widgetId: string) => void
+    }
+  }
+}
 
 interface ScanResult {
   url: string
@@ -31,12 +42,35 @@ interface ScanResult {
 }
 
 export default function Home() {
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAACp9k1gSv25NYbw7"
   const [url, setUrl] = useState("")
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<ScanResult | null>(null)
   const [error, setError] = useState("")
   const [darkMode, setDarkMode] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [turnstileScriptLoaded, setTurnstileScriptLoaded] = useState(false)
+  const [turnstileToken, setTurnstileToken] = useState("")
+  const widgetIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!turnstileScriptLoaded || !turnstileSiteKey || !window.turnstile || widgetIdRef.current) {
+      return
+    }
+
+    widgetIdRef.current = window.turnstile.render("#turnstile-container", {
+      sitekey: turnstileSiteKey,
+      callback: (token: string) => {
+        setTurnstileToken(token)
+        setError("")
+      },
+      "expired-callback": () => setTurnstileToken(""),
+      "error-callback": () => {
+        setTurnstileToken("")
+        setError("Turnstile verification failed. Please retry the challenge.")
+      },
+    })
+  }, [turnstileScriptLoaded, turnstileSiteKey])
 
   useEffect(() => {
     setMounted(true)
@@ -106,6 +140,11 @@ export default function Home() {
       return
     }
 
+    if (!turnstileToken) {
+      setError("Please complete the Turnstile verification before scanning.")
+      return
+    }
+
     setLoading(true)
     setError("")
     setResult(null)
@@ -118,7 +157,7 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ url: normalizedUrl }),
+        body: JSON.stringify({ url: normalizedUrl, turnstileToken }),
       })
 
       const data = await response.json()
@@ -132,6 +171,10 @@ export default function Home() {
       setError(err instanceof Error ? err.message : "An unexpected error occurred")
     } finally {
       setLoading(false)
+      setTurnstileToken("")
+      if (window.turnstile && widgetIdRef.current) {
+        window.turnstile.reset(widgetIdRef.current)
+      }
     }
   }
 
@@ -181,6 +224,11 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-900 dark:via-blue-900 dark:to-indigo-900 transition-all duration-500">
+      <Script
+        src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+        strategy="afterInteractive"
+        onLoad={() => setTurnstileScriptLoaded(true)}
+      />
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto">
           {/* Theme Toggle */}
@@ -261,6 +309,10 @@ export default function Home() {
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                     {loading ? "Scanning..." : "Scan"}
                   </Button>
+                </div>
+
+                <div className="flex justify-center">
+                  <div id="turnstile-container" className="min-h-[65px]" />
                 </div>
               </form>
 
