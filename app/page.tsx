@@ -15,6 +15,7 @@ import { AspectRatio } from "@/components/ui/aspect-ratio"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Skeleton } from "@/components/ui/skeleton"
 
 declare global {
   interface Window {
@@ -92,6 +93,14 @@ function scoreBadgeVariant(score: unknown, malicious: unknown): "default" | "sec
   return "outline"
 }
 
+function statusBadgeVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
+  const s = status.toLowerCase()
+  if (s.includes("complete")) return "default"
+  if (s.includes("processing") || s.includes("queued") || s.includes("submitting")) return "secondary"
+  if (s.includes("fail") || s.includes("error") || s.includes("timeout")) return "destructive"
+  return "outline"
+}
+
 export default function Home() {
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAACp9k1gSv25NYbw7"
   const [url, setUrl] = useState("")
@@ -103,6 +112,10 @@ export default function Home() {
   const [urlscanStatus, setUrlscanStatus] = useState("")
   const [virusTotalError, setVirusTotalError] = useState("")
   const [liveScanError, setLiveScanError] = useState("")
+  const [screenshotRefreshKey, setScreenshotRefreshKey] = useState(0)
+  const [screenshotLoading, setScreenshotLoading] = useState(false)
+  const [screenshotError, setScreenshotError] = useState(false)
+  const [reportLinkCopied, setReportLinkCopied] = useState(false)
   const [error, setError] = useState("")
   const [darkMode, setDarkMode] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -195,6 +208,10 @@ export default function Home() {
     setUrlscanStatus("")
     setVirusTotalError("")
     setLiveScanError("")
+    setScreenshotRefreshKey(0)
+    setScreenshotLoading(false)
+    setScreenshotError(false)
+    setReportLinkCopied(false)
   }
 
   const pollUrlscanResult = async (uuid: string) => {
@@ -225,7 +242,7 @@ export default function Home() {
         // 404 is common while urlscan is processing
         if (response.status !== 404) {
           const data = await response.json().catch(() => ({}))
-          throw new Error(data?.error || "Failed to fetch urlscan result")
+          throw new Error(data?.error || "Failed to fetch live scan result")
         }
 
         setUrlscanStatus(`Processing… (${attempt + 1}/${maxAttempts})`)
@@ -237,7 +254,7 @@ export default function Home() {
       await new Promise((resolve) => setTimeout(resolve, 2000))
     }
 
-    throw new Error("Timed out waiting for urlscan.io result. Please try again shortly.")
+    throw new Error("Timed out waiting for live scan result. Please try again shortly.")
   }
 
   const handleScan = async (e: React.FormEvent) => {
@@ -295,6 +312,9 @@ export default function Home() {
         setUrlscanSubmit(data.liveSubmit)
         if (data.liveSubmit.uuid) {
           setUrlscanStatus("Queued")
+          setScreenshotError(false)
+          setScreenshotLoading(true)
+          setScreenshotRefreshKey((v) => v + 1)
           await pollUrlscanResult(data.liveSubmit.uuid)
         } else {
           setLiveScanError("Live scan did not return a uuid")
@@ -488,6 +508,37 @@ export default function Home() {
             </CardContent>
           </Card>
 
+          {loading && (
+            <Card className="mb-6 animate-fade-in glass-effect bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-gray-200 dark:border-gray-700">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Scanning in progress
+                </CardTitle>
+                <CardDescription className="text-gray-600 dark:text-gray-400">
+                  Running multiple checks and gathering metadata…
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="mt-2 h-4 w-5/6" />
+                  </div>
+                  <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                    <Skeleton className="h-3 w-28" />
+                    <Skeleton className="mt-2 h-4 w-2/3" />
+                  </div>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                  <Skeleton className="h-3 w-32" />
+                  <Skeleton className="mt-2 h-4 w-full" />
+                  <Skeleton className="mt-2 h-4 w-11/12" />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Results */}
           {(virusTotalResult || virusTotalError) && (
             <div className="space-y-6 animate-fade-in">
@@ -650,10 +701,24 @@ export default function Home() {
             <div className="space-y-6 animate-fade-in">
               <Card className="hover-lift animate-scale-in glass-effect bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-gray-200 dark:border-gray-700">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                    <Shield className="h-5 w-5" />
-                    Live Scan Results
-                  </CardTitle>
+                  <div className="flex items-center justify-between gap-3">
+                    <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
+                      <Shield className="h-5 w-5" />
+                      Live Scan Results
+                    </CardTitle>
+                    {(urlscanStatus || liveScanError) && (
+                      <Badge
+                        variant={statusBadgeVariant(liveScanError ? "Error" : urlscanStatus || "—")}
+                        className={
+                          !liveScanError && urlscanStatus && !urlscanStatus.toLowerCase().includes("complete")
+                            ? "animate-pulse"
+                            : ""
+                        }
+                      >
+                        {liveScanError ? "Error" : urlscanStatus || "—"}
+                      </Badge>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {liveScanError && (
@@ -665,7 +730,12 @@ export default function Home() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
                       <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Status</label>
-                      <p className="text-sm text-gray-900 dark:text-gray-100">{urlscanStatus || "—"}</p>
+                      <div className="mt-1 flex items-center gap-2">
+                        {!urlscanResult && urlscanSubmit?.uuid && !liveScanError && (
+                          <Loader2 className="h-4 w-4 animate-spin text-gray-500 dark:text-gray-300" />
+                        )}
+                        <p className="text-sm text-gray-900 dark:text-gray-100">{urlscanStatus || "—"}</p>
+                      </div>
                     </div>
                     <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
                       <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Visibility</label>
@@ -673,26 +743,81 @@ export default function Home() {
                     </div>
                     <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
                       <label className="text-sm font-medium text-gray-500 dark:text-gray-400">UUID</label>
-                      <p className="text-sm break-all font-mono text-gray-900 dark:text-gray-100">
-                        {urlscanSubmit?.uuid || "—"}
-                      </p>
-                    </div>
-                    <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
-                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Result Link</label>
-                      {urlscanSubmit?.result ? (
-                        <a
-                          href={urlscanSubmit.result}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline transition-colors duration-200"
-                        >
-                          Open Full Report
-                        </a>
+                      {urlscanSubmit?.uuid ? (
+                        <p className="text-sm break-all font-mono text-gray-900 dark:text-gray-100">{urlscanSubmit.uuid}</p>
+                      ) : urlscanStatus ? (
+                        <Skeleton className="mt-2 h-4 w-4/5" />
                       ) : (
                         <p className="text-sm text-gray-900 dark:text-gray-100">—</p>
                       )}
                     </div>
+                    <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
+                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Result Link</label>
+                      {urlscanSubmit?.result ? (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(urlscanSubmit.result || "")
+                                setReportLinkCopied(true)
+                                setTimeout(() => setReportLinkCopied(false), 1500)
+                              } catch {
+                                // ignore clipboard errors
+                              }
+                            }}
+                          >
+                            {reportLinkCopied ? "Copied" : "Copy"}
+                          </Button>
+                          <p className="text-xs text-gray-600 dark:text-gray-400 break-all">
+                            {urlscanSubmit.result}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="mt-2">
+                          {urlscanSubmit?.uuid && !liveScanError ? (
+                            <Skeleton className="h-8 w-24" />
+                          ) : (
+                            <p className="text-sm text-gray-900 dark:text-gray-100">—</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
+
+                  {urlscanSubmit?.uuid && !urlscanResult && !liveScanError && (
+                    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-900/40 p-4">
+                      <div className="flex items-center justify-between gap-3 mb-3">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Fetching details…</p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">This usually finishes in a few seconds.</p>
+                        </div>
+                        <Badge variant="outline" className="font-mono">
+                          {urlscanVisibility}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                          <Skeleton className="h-3 w-24" />
+                          <Skeleton className="mt-2 h-4 w-5/6" />
+                        </div>
+                        <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                          <Skeleton className="h-3 w-28" />
+                          <Skeleton className="mt-2 h-4 w-2/3" />
+                        </div>
+                        <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                          <Skeleton className="h-3 w-20" />
+                          <Skeleton className="mt-2 h-4 w-1/2" />
+                        </div>
+                        <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                          <Skeleton className="h-3 w-24" />
+                          <Skeleton className="mt-2 h-4 w-1/3" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {urlscanResult && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -956,10 +1081,24 @@ export default function Home() {
               {urlscanSubmit?.uuid && (
                 <Card className="hover-lift animate-scale-in glass-effect bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-gray-200 dark:border-gray-700">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                      <Globe className="h-5 w-5" />
-                      Live Screenshot Preview
-                    </CardTitle>
+                    <div className="flex items-center justify-between gap-3">
+                      <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
+                        <Globe className="h-5 w-5" />
+                        Live Screenshot Preview
+                      </CardTitle>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setScreenshotError(false)
+                          setScreenshotLoading(true)
+                          setScreenshotRefreshKey((v) => v + 1)
+                        }}
+                      >
+                        Refresh
+                      </Button>
+                    </div>
                     <CardDescription className="text-gray-600 dark:text-gray-400">
                       Screenshot may take a few seconds to appear.
                     </CardDescription>
@@ -967,15 +1106,47 @@ export default function Home() {
                   <CardContent>
                     <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
                       <AspectRatio ratio={16 / 9}>
-                        <img
-                          src={
-                            urlscanResult?.task?.screenshotURL ||
-                            `https://urlscan.io/screenshots/${encodeURIComponent(urlscanSubmit.uuid)}.png`
-                          }
-                          alt="Live scan screenshot"
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                        />
+                        <div className="relative h-full w-full">
+                          <div className="absolute inset-0">
+                            <Skeleton className="h-full w-full rounded-none" />
+                          </div>
+
+                          {(screenshotLoading || screenshotError) && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-white/70 dark:bg-gray-900/60">
+                              {screenshotLoading ? (
+                                <div className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  <span className="text-sm">Loading preview…</span>
+                                </div>
+                              ) : (
+                                <div className="text-center px-6">
+                                  <p className="text-sm text-gray-900 dark:text-gray-100 font-medium">Preview unavailable</p>
+                                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                    Try refreshing in a few seconds.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          <img
+                            key={screenshotRefreshKey}
+                            src={`/api/urlscan/screenshot/${encodeURIComponent(urlscanSubmit.uuid)}?t=${screenshotRefreshKey}`}
+                            alt="Live scan screenshot"
+                            className={`h-full w-full object-cover relative transition-opacity duration-300 ${
+                              screenshotLoading || screenshotError ? "opacity-0" : "opacity-100"
+                            }`}
+                            loading="lazy"
+                            onLoad={() => {
+                              setScreenshotLoading(false)
+                              setScreenshotError(false)
+                            }}
+                            onError={() => {
+                              setScreenshotLoading(false)
+                              setScreenshotError(true)
+                            }}
+                          />
+                        </div>
                       </AspectRatio>
                     </div>
                   </CardContent>
