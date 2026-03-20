@@ -85,6 +85,11 @@ function toText(value: unknown): string {
   return "—"
 }
 
+function toOptionalText(value: unknown): string | null {
+  const t = toText(value)
+  return t === "—" ? null : t
+}
+
 function scoreBadgeVariant(score: unknown, malicious: unknown): "default" | "secondary" | "destructive" | "outline" {
   const isMalicious = malicious === true
   if (isMalicious) return "destructive"
@@ -115,7 +120,6 @@ export default function Home() {
   const [screenshotRefreshKey, setScreenshotRefreshKey] = useState(0)
   const [screenshotLoading, setScreenshotLoading] = useState(false)
   const [screenshotError, setScreenshotError] = useState(false)
-  const [reportLinkCopied, setReportLinkCopied] = useState(false)
   const [error, setError] = useState("")
   const [darkMode, setDarkMode] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -211,7 +215,6 @@ export default function Home() {
     setScreenshotRefreshKey(0)
     setScreenshotLoading(false)
     setScreenshotError(false)
-    setReportLinkCopied(false)
   }
 
   const pollUrlscanResult = async (uuid: string) => {
@@ -741,51 +744,121 @@ export default function Home() {
                       <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Visibility</label>
                       <p className="text-sm text-gray-900 dark:text-gray-100 capitalize">{urlscanVisibility}</p>
                     </div>
-                    <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
-                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">UUID</label>
-                      {urlscanSubmit?.uuid ? (
-                        <p className="text-sm break-all font-mono text-gray-900 dark:text-gray-100">{urlscanSubmit.uuid}</p>
-                      ) : urlscanStatus ? (
-                        <Skeleton className="mt-2 h-4 w-4/5" />
-                      ) : (
-                        <p className="text-sm text-gray-900 dark:text-gray-100">—</p>
-                      )}
-                    </div>
-                    <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
-                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Result Link</label>
-                      {urlscanSubmit?.result ? (
-                        <div className="flex items-center gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={async () => {
-                              try {
-                                await navigator.clipboard.writeText(urlscanSubmit.result || "")
-                                setReportLinkCopied(true)
-                                setTimeout(() => setReportLinkCopied(false), 1500)
-                              } catch {
-                                // ignore clipboard errors
-                              }
-                            }}
-                          >
-                            {reportLinkCopied ? "Copied" : "Copy"}
-                          </Button>
-                          <p className="text-xs text-gray-600 dark:text-gray-400 break-all">
-                            {urlscanSubmit.result}
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="mt-2">
-                          {urlscanSubmit?.uuid && !liveScanError ? (
-                            <Skeleton className="h-8 w-24" />
-                          ) : (
-                            <p className="text-sm text-gray-900 dark:text-gray-100">—</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
                   </div>
+
+                  {urlscanResult && (
+                    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-900/40 p-4 space-y-4">
+                      {(() => {
+                        const stats = isRecord(urlscanResult?.stats) ? urlscanResult.stats : null
+                        const uniqIps = typeof stats?.uniqIPs === "number" ? stats.uniqIPs : undefined
+                        const uniqCountries = typeof stats?.uniqCountries === "number" ? stats.uniqCountries : undefined
+                        const uniqDomains = typeof stats?.uniqDomains === "number" ? stats.uniqDomains : undefined
+                        const requests = typeof stats?.requests === "number" ? stats.requests : undefined
+
+                        const ip = toOptionalText(urlscanResult?.page?.ip)
+                        const country = toOptionalText(urlscanResult?.page?.country)
+                        const asnName = toOptionalText(urlscanResult?.page?.asnname)
+                        const asn = toOptionalText(urlscanResult?.page?.asn)
+                        const domain = toOptionalText(urlscanResult?.page?.domain)
+                        const submittedUrl = toOptionalText(urlscanResult?.task?.url)
+                        const effectiveUrl = toOptionalText(urlscanResult?.page?.url)
+                        const pageTitle = toOptionalText(urlscanResult?.page?.title)
+                        const time = toOptionalText(urlscanResult?.task?.time)
+                        const scannerCountry = toOptionalText(urlscanResult?.page?.country)
+                        const submitterCountry = toOptionalText(urlscanResult?.task?.country)
+
+                        const overallVerdict = isRecord(urlscanResult?.verdicts?.overall)
+                          ? urlscanResult.verdicts.overall
+                          : isRecord(urlscanResult?.verdicts?.urlscan)
+                            ? urlscanResult.verdicts.urlscan
+                            : null
+                        const malicious = overallVerdict?.malicious
+                        const categories = Array.isArray(overallVerdict?.categories)
+                          ? overallVerdict.categories.filter((c: any) => typeof c === "string" && c.trim().length > 0)
+                          : []
+                        const verdictText = malicious === true ? "Malicious" : categories.length > 0 ? categories[0] : "No classification"
+
+                        const summaryBits: string[] = []
+                        if (
+                          typeof uniqIps === "number" &&
+                          typeof uniqCountries === "number" &&
+                          typeof uniqDomains === "number" &&
+                          typeof requests === "number"
+                        ) {
+                          summaryBits.push(
+                            `This website contacted ${uniqIps} IPs in ${uniqCountries} countries across ${uniqDomains} domains to perform ${requests} HTTP transactions.`
+                          )
+                        }
+                        if (ip) {
+                          const location = country ? `, located in ${country}` : ""
+                          const owner = asnName ? ` and belongs to ${asnName}` : asn ? ` and belongs to ${asn}` : ""
+                          summaryBits.push(`The main IP is ${ip}${location}${owner}.`)
+                        }
+                        if (domain) {
+                          summaryBits.push(`The main domain is ${domain}.`)
+                        }
+
+                        const liveRows: Array<{ label: string; value: string }> = []
+                        liveRows.push({ label: "Verdict", value: verdictText })
+                        if (submittedUrl) liveRows.push({ label: "Submitted URL", value: submittedUrl })
+                        if (effectiveUrl) liveRows.push({ label: "Effective URL", value: effectiveUrl })
+                        if (time || submitterCountry || scannerCountry) {
+                          const parts = [time ? `On ${time}` : null, submitterCountry ? `from ${submitterCountry}` : null, scannerCountry ? `scanned in ${scannerCountry}` : null].filter(
+                            Boolean
+                          ) as string[]
+                          if (parts.length) liveRows.push({ label: "Submission", value: parts.join(" ") })
+                        }
+                        if (pageTitle) liveRows.push({ label: "Page Title", value: pageTitle })
+                        if (domain) liveRows.push({ label: "Domain", value: domain })
+                        if (ip) {
+                          const aRecord = asn ? `${ip} (${asn}${asnName ? ` • ${asnName}` : ""})` : asnName ? `${ip} (${asnName})` : ip
+                          liveRows.push({ label: "Current DNS A record", value: aRecord })
+                        }
+
+                        return (
+                          <>
+                            {summaryBits.length > 0 && (
+                              <div>
+                                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Summary</p>
+                                <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{summaryBits.join(" ")}</p>
+                              </div>
+                            )}
+
+                            <div>
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Live information</p>
+                                <Badge variant={scoreBadgeVariant(overallVerdict?.score, overallVerdict?.malicious)}>
+                                  {verdictText}
+                                </Badge>
+                              </div>
+                              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {liveRows
+                                  .filter((r) => typeof r.value === "string" && r.value.trim().length > 0)
+                                  .slice(0, 8)
+                                  .map((row) => (
+                                    <div
+                                      key={row.label}
+                                      className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
+                                    >
+                                      <p className="text-xs text-gray-500 dark:text-gray-400">{row.label}</p>
+                                      <p
+                                        className={
+                                          row.label.toLowerCase().includes("url")
+                                            ? "mt-1 text-sm break-all font-mono text-gray-900 dark:text-gray-100"
+                                            : "mt-1 text-sm text-gray-900 dark:text-gray-100"
+                                        }
+                                      >
+                                        {row.value}
+                                      </p>
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
+                          </>
+                        )
+                      })()}
+                    </div>
+                  )}
 
                   {urlscanSubmit?.uuid && !urlscanResult && !liveScanError && (
                     <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-900/40 p-4">
@@ -844,235 +917,240 @@ export default function Home() {
 
                   {urlscanResult && (
                     <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-900/40 p-4">
-                      <Accordion type="multiple" className="w-full">
-                        <AccordionItem value="verdicts">
-                          <AccordionTrigger className="text-gray-900 dark:text-gray-100">Verdicts</AccordionTrigger>
-                          <AccordionContent>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              {(() => {
-                                const verdicts = urlscanResult?.verdicts
-                                if (!isRecord(verdicts)) {
-                                  return (
-                                    <p className="text-sm text-gray-600 dark:text-gray-400">No verdict data available.</p>
-                                  )
-                                }
+                      {(() => {
+                        const verdicts = isRecord(urlscanResult?.verdicts) ? (urlscanResult.verdicts as Record<string, any>) : null
+                        const verdictEntries = verdicts
+                          ? Object.entries(verdicts)
+                              .filter(([, v]) => isRecord(v) && (typeof (v as any).score === "number" || typeof (v as any).malicious === "boolean"))
+                              .slice(0, 8)
+                          : []
 
-                                const entries = Object.entries(verdicts)
-                                  .filter(([, v]) => isRecord(v))
-                                  .slice(0, 8)
+                        const apps =
+                          urlscanResult?.meta?.processors?.wappalyzer?.data?.applications ||
+                          urlscanResult?.meta?.processors?.wappa?.data?.applications ||
+                          urlscanResult?.meta?.processors?.wappalyzer?.data?.technologies ||
+                          urlscanResult?.meta?.processors?.wappa?.data?.technologies ||
+                          []
+                        const names: string[] = Array.isArray(apps)
+                          ? apps
+                              .map((a: any) => (typeof a === "string" ? a : a?.name))
+                              .filter((n: any) => typeof n === "string" && n.trim().length > 0)
+                          : []
+                        const techDeduped = Array.from(new Set(names)).slice(0, 30)
+                        const server = toOptionalText(urlscanResult?.page?.server)
+                        const asn = toOptionalText(urlscanResult?.page?.asn)
+                        const hasTech = techDeduped.length > 0 || !!server || !!asn
 
-                                if (entries.length === 0) {
-                                  return (
-                                    <p className="text-sm text-gray-600 dark:text-gray-400">No verdict data available.</p>
-                                  )
-                                }
+                        const requests = Array.isArray(urlscanResult?.data?.requests) ? urlscanResult.data.requests : []
+                        const requestRows = requests.slice(0, 20)
+                        const hasRequests = requestRows.length > 0
 
-                                return entries.map(([name, v]) => (
-                                  <div
-                                    key={name}
-                                    className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
-                                  >
-                                    <div className="flex items-center justify-between gap-2">
-                                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 capitalize">
-                                        {name.replace(/_/g, " ")}
-                                      </p>
-                                      <Badge variant={scoreBadgeVariant(v.score, v.malicious)}>
-                                        {v.malicious === true ? "Malicious" : "OK"}
-                                      </Badge>
-                                    </div>
-                                    <div className="mt-2 grid grid-cols-2 gap-2">
-                                      <div>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">Score</p>
-                                        <p className="text-sm text-gray-900 dark:text-gray-100">{toText(v.score)}</p>
-                                      </div>
-                                      <div>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">Categories</p>
-                                        <p className="text-sm text-gray-900 dark:text-gray-100">
-                                          {Array.isArray(v.categories) ? v.categories.slice(0, 3).join(", ") || "—" : "—"}
-                                        </p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))
-                              })()}
-                            </div>
-                          </AccordionContent>
-                        </AccordionItem>
+                        const lists = urlscanResult?.lists
+                        const domains = asStringArray(lists?.domains).slice(0, 30)
+                        const ips = asStringArray(lists?.ips).slice(0, 30)
+                        const urls = asStringArray(lists?.urls).slice(0, 30)
+                        const links = asStringArray(urlscanResult?.data?.links).slice(0, 30)
+                        const hasIndicators = domains.length || ips.length || urls.length || links.length
 
-                        <AccordionItem value="technologies">
-                          <AccordionTrigger className="text-gray-900 dark:text-gray-100">Technologies</AccordionTrigger>
-                          <AccordionContent>
-                            {(() => {
-                              const apps =
-                                urlscanResult?.meta?.processors?.wappalyzer?.data?.applications ||
-                                urlscanResult?.meta?.processors?.wappa?.data?.applications ||
-                                urlscanResult?.meta?.processors?.wappalyzer?.data?.technologies ||
-                                urlscanResult?.meta?.processors?.wappa?.data?.technologies ||
-                                []
+                        const showAccordion = verdictEntries.length > 0 || hasTech || hasRequests || hasIndicators
+                        if (!showAccordion) return null
 
-                              const names: string[] = Array.isArray(apps)
-                                ? apps
-                                    .map((a: any) => (typeof a === "string" ? a : a?.name))
-                                    .filter((n: any) => typeof n === "string" && n.trim().length > 0)
-                                : []
-
-                              const deduped = Array.from(new Set(names)).slice(0, 30)
-
-                              return (
-                                <div className="space-y-3">
+                        return (
+                          <Accordion type="multiple" className="w-full">
+                            {verdictEntries.length > 0 && (
+                              <AccordionItem value="verdicts">
+                                <AccordionTrigger className="text-gray-900 dark:text-gray-100">Verdicts</AccordionTrigger>
+                                <AccordionContent>
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
-                                      <p className="text-xs text-gray-500 dark:text-gray-400">Server</p>
-                                      <p className="text-sm text-gray-900 dark:text-gray-100">{toText(urlscanResult?.page?.server)}</p>
-                                    </div>
-                                    <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
-                                      <p className="text-xs text-gray-500 dark:text-gray-400">ASN</p>
-                                      <p className="text-sm text-gray-900 dark:text-gray-100">{toText(urlscanResult?.page?.asn)}</p>
-                                    </div>
-                                  </div>
-
-                                  {deduped.length > 0 ? (
-                                    <div className="flex flex-wrap gap-2">
-                                      {deduped.map((name) => (
-                                        <Badge key={name} variant="secondary" className="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-                                          {name}
-                                        </Badge>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <p className="text-sm text-gray-600 dark:text-gray-400">No technology data available.</p>
-                                  )}
-                                </div>
-                              )
-                            })()}
-                          </AccordionContent>
-                        </AccordionItem>
-
-                        <AccordionItem value="requests">
-                          <AccordionTrigger className="text-gray-900 dark:text-gray-100">Network Requests</AccordionTrigger>
-                          <AccordionContent>
-                            {(() => {
-                              const requests = Array.isArray(urlscanResult?.data?.requests) ? urlscanResult.data.requests : []
-                              if (requests.length === 0) {
-                                return (
-                                  <p className="text-sm text-gray-600 dark:text-gray-400">No request data available.</p>
-                                )
-                              }
-
-                              const rows = requests.slice(0, 20)
-                              return (
-                                <ScrollArea className="h-80 rounded-md border border-gray-200 dark:border-gray-700">
-                                  <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                                    {rows.map((r: any, idx: number) => {
-                                      const method = r?.request?.method || r?.method
-                                      const reqUrl = r?.request?.url || r?.url
-                                      const status = r?.response?.status || r?.status
-                                      const mime = r?.response?.mimeType || r?.response?.type
-                                      return (
-                                        <div key={idx} className="p-3 bg-white/70 dark:bg-gray-900/40">
-                                          <div className="flex items-center justify-between gap-2">
-                                            <div className="flex items-center gap-2">
-                                              <Badge variant="outline" className="font-mono">
-                                                {toText(method)}
-                                              </Badge>
-                                              <Badge
-                                                variant={typeof status === "number" && status >= 400 ? "destructive" : "secondary"}
-                                                className="font-mono"
-                                              >
-                                                {toText(status)}
-                                              </Badge>
+                                    {verdictEntries.map(([name, v]) => (
+                                      <div
+                                        key={name}
+                                        className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
+                                      >
+                                        <div className="flex items-center justify-between gap-2">
+                                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 capitalize">
+                                            {name.replace(/_/g, " ")}
+                                          </p>
+                                          <Badge variant={scoreBadgeVariant(v.score, v.malicious)}>
+                                            {v.malicious === true ? "Malicious" : "OK"}
+                                          </Badge>
+                                        </div>
+                                        <div className="mt-2 grid grid-cols-2 gap-2">
+                                          {typeof v.score !== "undefined" && (
+                                            <div>
+                                              <p className="text-xs text-gray-500 dark:text-gray-400">Score</p>
+                                              <p className="text-sm text-gray-900 dark:text-gray-100">{toText(v.score)}</p>
                                             </div>
-                                            <span className="text-xs text-gray-500 dark:text-gray-400">{toText(mime)}</span>
-                                          </div>
-                                          <p className="mt-2 text-sm break-all font-mono text-gray-900 dark:text-gray-100">{toText(reqUrl)}</p>
+                                          )}
+                                          {Array.isArray(v.categories) && v.categories.length > 0 && (
+                                            <div>
+                                              <p className="text-xs text-gray-500 dark:text-gray-400">Categories</p>
+                                              <p className="text-sm text-gray-900 dark:text-gray-100">
+                                                {v.categories.slice(0, 3).join(", ")}
+                                              </p>
+                                            </div>
+                                          )}
                                         </div>
-                                      )
-                                    })}
+                                      </div>
+                                    ))}
                                   </div>
-                                </ScrollArea>
-                              )
-                            })()}
-                          </AccordionContent>
-                        </AccordionItem>
+                                </AccordionContent>
+                              </AccordionItem>
+                            )}
 
-                        <AccordionItem value="indicators">
-                          <AccordionTrigger className="text-gray-900 dark:text-gray-100">Extracted Indicators</AccordionTrigger>
-                          <AccordionContent>
-                            {(() => {
-                              const lists = urlscanResult?.lists
-                              const domains = asStringArray(lists?.domains).slice(0, 30)
-                              const ips = asStringArray(lists?.ips).slice(0, 30)
-                              const urls = asStringArray(lists?.urls).slice(0, 30)
-                              const links = asStringArray(urlscanResult?.data?.links).slice(0, 30)
+                            {hasTech && (
+                              <AccordionItem value="technologies">
+                                <AccordionTrigger className="text-gray-900 dark:text-gray-100">
+                                  Technologies
+                                </AccordionTrigger>
+                                <AccordionContent>
+                                  <div className="space-y-3">
+                                    {(server || asn) && (
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {server && (
+                                          <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">Server</p>
+                                            <p className="text-sm text-gray-900 dark:text-gray-100">{server}</p>
+                                          </div>
+                                        )}
+                                        {asn && (
+                                          <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">ASN</p>
+                                            <p className="text-sm text-gray-900 dark:text-gray-100">{asn}</p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
 
-                              const hasAny = domains.length || ips.length || urls.length || links.length
-                              if (!hasAny) {
-                                return <p className="text-sm text-gray-600 dark:text-gray-400">No indicators available.</p>
-                              }
-
-                              return (
-                                <div className="space-y-4">
-                                  {domains.length > 0 && (
-                                    <div>
-                                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Domains</p>
+                                    {techDeduped.length > 0 && (
                                       <div className="flex flex-wrap gap-2">
-                                        {domains.map((d) => (
-                                          <Badge key={d} variant="outline" className="font-mono">
-                                            {d}
+                                        {techDeduped.map((t) => (
+                                          <Badge
+                                            key={t}
+                                            variant="secondary"
+                                            className="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                          >
+                                            {t}
                                           </Badge>
                                         ))}
                                       </div>
-                                    </div>
-                                  )}
+                                    )}
+                                  </div>
+                                </AccordionContent>
+                              </AccordionItem>
+                            )}
 
-                                  {ips.length > 0 && (
-                                    <div>
-                                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">IPs</p>
-                                      <div className="flex flex-wrap gap-2">
-                                        {ips.map((ip) => (
-                                          <Badge key={ip} variant="outline" className="font-mono">
-                                            {ip}
-                                          </Badge>
-                                        ))}
+                            {hasRequests && (
+                              <AccordionItem value="requests">
+                                <AccordionTrigger className="text-gray-900 dark:text-gray-100">
+                                  Network Requests ({requests.length})
+                                </AccordionTrigger>
+                                <AccordionContent>
+                                  <ScrollArea className="h-80 rounded-md border border-gray-200 dark:border-gray-700">
+                                    <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                                      {requestRows.map((r: any, idx: number) => {
+                                        const method = r?.request?.method || r?.method
+                                        const reqUrl = r?.request?.url || r?.url
+                                        const status = r?.response?.status || r?.status
+                                        const mime = r?.response?.mimeType || r?.response?.type
+                                        if (!reqUrl) return null
+                                        return (
+                                          <div key={idx} className="p-3 bg-white/70 dark:bg-gray-900/40">
+                                            <div className="flex items-center justify-between gap-2">
+                                              <div className="flex items-center gap-2">
+                                                {method && (
+                                                  <Badge variant="outline" className="font-mono">
+                                                    {toText(method)}
+                                                  </Badge>
+                                                )}
+                                                {typeof status !== "undefined" && (
+                                                  <Badge
+                                                    variant={typeof status === "number" && status >= 400 ? "destructive" : "secondary"}
+                                                    className="font-mono"
+                                                  >
+                                                    {toText(status)}
+                                                  </Badge>
+                                                )}
+                                              </div>
+                                              {mime && <span className="text-xs text-gray-500 dark:text-gray-400">{toText(mime)}</span>}
+                                            </div>
+                                            <p className="mt-2 text-sm break-all font-mono text-gray-900 dark:text-gray-100">{toText(reqUrl)}</p>
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  </ScrollArea>
+                                </AccordionContent>
+                              </AccordionItem>
+                            )}
+
+                            {hasIndicators ? (
+                              <AccordionItem value="indicators">
+                                <AccordionTrigger className="text-gray-900 dark:text-gray-100">Extracted Indicators</AccordionTrigger>
+                                <AccordionContent>
+                                  <div className="space-y-4">
+                                    {domains.length > 0 && (
+                                      <div>
+                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Domains</p>
+                                        <div className="flex flex-wrap gap-2">
+                                          {domains.map((d) => (
+                                            <Badge key={d} variant="outline" className="font-mono">
+                                              {d}
+                                            </Badge>
+                                          ))}
+                                        </div>
                                       </div>
-                                    </div>
-                                  )}
+                                    )}
 
-                                  {urls.length > 0 && (
-                                    <div>
-                                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">URLs</p>
-                                      <ScrollArea className="h-48 rounded-md border border-gray-200 dark:border-gray-700">
-                                        <div className="p-3 space-y-2">
-                                          {urls.map((u) => (
-                                            <p key={u} className="text-xs break-all font-mono text-gray-900 dark:text-gray-100">
-                                              {u}
-                                            </p>
+                                    {ips.length > 0 && (
+                                      <div>
+                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">IPs</p>
+                                        <div className="flex flex-wrap gap-2">
+                                          {ips.map((ipVal) => (
+                                            <Badge key={ipVal} variant="outline" className="font-mono">
+                                              {ipVal}
+                                            </Badge>
                                           ))}
                                         </div>
-                                      </ScrollArea>
-                                    </div>
-                                  )}
+                                      </div>
+                                    )}
 
-                                  {links.length > 0 && (
-                                    <div>
-                                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Links</p>
-                                      <ScrollArea className="h-48 rounded-md border border-gray-200 dark:border-gray-700">
-                                        <div className="p-3 space-y-2">
-                                          {links.map((u) => (
-                                            <p key={u} className="text-xs break-all font-mono text-gray-900 dark:text-gray-100">
-                                              {u}
-                                            </p>
-                                          ))}
-                                        </div>
-                                      </ScrollArea>
-                                    </div>
-                                  )}
-                                </div>
-                              )
-                            })()}
-                          </AccordionContent>
-                        </AccordionItem>
-                      </Accordion>
+                                    {urls.length > 0 && (
+                                      <div>
+                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">URLs</p>
+                                        <ScrollArea className="h-48 rounded-md border border-gray-200 dark:border-gray-700">
+                                          <div className="p-3 space-y-2">
+                                            {urls.map((u) => (
+                                              <p key={u} className="text-xs break-all font-mono text-gray-900 dark:text-gray-100">
+                                                {u}
+                                              </p>
+                                            ))}
+                                          </div>
+                                        </ScrollArea>
+                                      </div>
+                                    )}
+
+                                    {links.length > 0 && (
+                                      <div>
+                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Links</p>
+                                        <ScrollArea className="h-48 rounded-md border border-gray-200 dark:border-gray-700">
+                                          <div className="p-3 space-y-2">
+                                            {links.map((u) => (
+                                              <p key={u} className="text-xs break-all font-mono text-gray-900 dark:text-gray-100">
+                                                {u}
+                                              </p>
+                                            ))}
+                                          </div>
+                                        </ScrollArea>
+                                      </div>
+                                    )}
+                                  </div>
+                                </AccordionContent>
+                              </AccordionItem>
+                            ) : null}
+                          </Accordion>
+                        )
+                      })()}
                     </div>
                   )}
                 </CardContent>
