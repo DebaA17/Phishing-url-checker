@@ -222,7 +222,7 @@ export default function Home() {
     const controller = new AbortController()
     pollingRef.current = controller
 
-    const maxAttempts = 30
+    const maxAttempts = 60
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (controller.signal.aborted) return
 
@@ -257,7 +257,7 @@ export default function Home() {
       await new Promise((resolve) => setTimeout(resolve, 2000))
     }
 
-    throw new Error("Timed out waiting for live scan result. Please try again shortly.")
+    throw new Error("Live scan is taking longer than usual. Please try again in a moment.")
   }
 
   const handleScan = async (e: React.FormEvent) => {
@@ -318,7 +318,12 @@ export default function Home() {
           setScreenshotError(false)
           setScreenshotLoading(true)
           setScreenshotRefreshKey((v) => v + 1)
-          await pollUrlscanResult(data.liveSubmit.uuid)
+          try {
+            await pollUrlscanResult(data.liveSubmit.uuid)
+          } catch (pollErr) {
+            setLiveScanError(pollErr instanceof Error ? pollErr.message : "Failed to fetch live scan result")
+            setUrlscanStatus("Timed out")
+          }
         } else {
           setLiveScanError("Live scan did not return a uuid")
           setUrlscanStatus("")
@@ -332,6 +337,7 @@ export default function Home() {
         setError("Both scans failed. Please try again.")
       }
     } catch (err) {
+      // Keep global errors for the initial combined request only.
       setError(err instanceof Error ? err.message : "An unexpected error occurred")
     } finally {
       setLoading(false)
@@ -860,7 +866,7 @@ export default function Home() {
                     </div>
                   )}
 
-                  {urlscanSubmit?.uuid && !urlscanResult && !liveScanError && (
+                  {urlscanSubmit?.uuid && !urlscanResult && !liveScanError && urlscanStatus !== "Timed out" && (
                     <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-900/40 p-4">
                       <div className="flex items-center justify-between gap-3 mb-3">
                         <div className="space-y-1">

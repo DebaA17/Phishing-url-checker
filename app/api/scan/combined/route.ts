@@ -99,6 +99,53 @@ function getClientIP(request: NextRequest): string {
   return requestIP || "unknown"
 }
 
+async function logToTelegram(url: string, ip: string, userAgent: string, result: any) {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN
+  const chatId = process.env.TELEGRAM_CHAT_ID || process.env.TELEGRAM_USER_ID
+
+  if (!botToken || !chatId) {
+    console.warn("Telegram credentials not configured")
+    return
+  }
+
+  const timestamp = new Date().toLocaleString("en-US", {
+    timeZone: "UTC",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  })
+
+  const safeUrl = typeof url === "string" ? url : "unknown"
+  const threatLevel = result?.threatLevel || "unknown"
+  const positives = typeof result?.positives === "number" ? result.positives : 0
+  const total = typeof result?.total === "number" ? result.total : 0
+
+  const message = `URL Scan Alert\n\nTime: ${timestamp} UTC\nURL: ${safeUrl}\nIP: ${ip}\nUser Agent: ${userAgent.substring(0, 100)}${userAgent.length > 100 ? "..." : ""}\nThreat Level: ${threatLevel}\nDetection: ${positives}/${total}\nOrganization: ${result?.rdap?.organization || "Unknown"}\nCountry: ${result?.rdap?.country || "Unknown"}\nRegistrar: ${result?.rdap?.registrar || "Unknown"}`
+
+  try {
+    const resp = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: message,
+      }),
+    })
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "")
+      console.warn("Telegram notification failed:", resp.status, text)
+    }
+  } catch (error) {
+    console.error("Failed to send Telegram notification:", error)
+  }
+}
+
 async function verifyTurnstileToken(secret: string, token: string, remoteip?: string): Promise<boolean> {
   const body = new URLSearchParams({
     secret,
@@ -306,6 +353,7 @@ export async function POST(request: NextRequest) {
     }
 
     const clientIP = getClientIP(request)
+    const userAgent = request.headers.get("user-agent") || "unknown"
     const isTurnstileValid = await verifyTurnstileToken(
       turnstileSecret,
       turnstileToken,
@@ -426,6 +474,11 @@ export async function POST(request: NextRequest) {
       liveOutcome.status === "fulfilled"
         ? liveOutcome.value
         : { submit: null, error: liveOutcome.reason instanceof Error ? liveOutcome.reason.message : "Live scan failed" }
+
+    if (virusTotal) {
+      // Fire and forget; do not block response.
+      logToTelegram(url, clientIP, userAgent, virusTotal).catch(() => {})
+    }
 
     return NextResponse.json({
       virusTotal,
