@@ -59,6 +59,14 @@ interface UrlscanSubmitResponse {
 
 type UrlscanResult = any
 
+interface CombinedScanResponse {
+  virusTotal: VirusTotalScanResult | null
+  virusTotalError: string | null
+  liveSubmit: UrlscanSubmitResponse | null
+  liveError: string | null
+  error?: string
+}
+
 function asStringArray(value: unknown): string[] {
   if (!value) return []
   if (Array.isArray(value)) return value.filter((v) => typeof v === "string")
@@ -257,69 +265,47 @@ export default function Home() {
     try {
       const normalizedUrl = normalizeUrl(url)
 
-      const virusTotalTask = (async () => {
-        const response = await fetch("/api/scan", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ url: normalizedUrl, turnstileToken }),
-        })
+      setUrlscanStatus("Submitting…")
+      const response = await fetch("/api/scan/combined", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          url: normalizedUrl,
+          visibility: urlscanVisibility,
+          turnstileToken,
+        }),
+      })
 
-        const data = await response.json()
+      const data = (await response.json()) as CombinedScanResponse
 
-        if (!response.ok) {
-          throw new Error(data.error || "Primary scan failed")
-        }
-
-        setVirusTotalResult(data)
-      })()
-
-      const liveScanTask = (async () => {
-        setUrlscanStatus("Submitting…")
-        const response = await fetch("/api/urlscan/submit", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            url: normalizedUrl,
-            visibility: urlscanVisibility,
-            turnstileToken,
-          }),
-        })
-
-        const data = await response.json()
-
-        if (!response.ok) {
-          throw new Error(data.error || "Live scan submission failed")
-        }
-
-        setUrlscanSubmit(data)
-        const uuid = (data as UrlscanSubmitResponse).uuid
-        if (!uuid) {
-          throw new Error("Live scan did not return a uuid")
-        }
-
-        setUrlscanStatus("Queued")
-        await pollUrlscanResult(uuid)
-      })()
-
-      const [vtOutcome, liveOutcome] = await Promise.allSettled([virusTotalTask, liveScanTask])
-
-      const vtFailed = vtOutcome.status === "rejected"
-      const liveFailed = liveOutcome.status === "rejected"
-
-      if (vtFailed) {
-        setVirusTotalError(vtOutcome.reason instanceof Error ? vtOutcome.reason.message : "Primary scan failed")
+      if (!response.ok) {
+        throw new Error(data.error || "Scan failed")
       }
 
-      if (liveFailed) {
-        setLiveScanError(liveOutcome.reason instanceof Error ? liveOutcome.reason.message : "Live scan failed")
+      if (data.virusTotal) {
+        setVirusTotalResult(data.virusTotal)
+      }
+      if (data.virusTotalError) {
+        setVirusTotalError(data.virusTotalError)
+      }
+
+      if (data.liveSubmit) {
+        setUrlscanSubmit(data.liveSubmit)
+        if (data.liveSubmit.uuid) {
+          setUrlscanStatus("Queued")
+          await pollUrlscanResult(data.liveSubmit.uuid)
+        } else {
+          setLiveScanError("Live scan did not return a uuid")
+          setUrlscanStatus("")
+        }
+      } else {
+        if (data.liveError) setLiveScanError(data.liveError)
         setUrlscanStatus("")
       }
 
-      if (vtFailed && liveFailed) {
+      if (!data.virusTotal && !data.liveSubmit) {
         setError("Both scans failed. Please try again.")
       }
     } catch (err) {
