@@ -9,6 +9,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+import { AspectRatio } from "@/components/ui/aspect-ratio"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { Badge } from "@/components/ui/badge"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 declare global {
   interface Window {
@@ -20,7 +26,7 @@ declare global {
   }
 }
 
-interface ScanResult {
+interface VirusTotalScanResult {
   url: string
   threatLevel: "safe" | "suspicious" | "malicious" | "unknown"
   positives: number
@@ -41,17 +47,62 @@ interface ScanResult {
   }
 }
 
+type UrlscanVisibility = "public" | "private"
+
+interface UrlscanSubmitResponse {
+  uuid: string
+  result?: string
+  api?: string
+  visibility?: string
+  message?: string
+}
+
+type UrlscanResult = any
+
+function asStringArray(value: unknown): string[] {
+  if (!value) return []
+  if (Array.isArray(value)) return value.filter((v) => typeof v === "string")
+  return []
+}
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+}
+
+function toText(value: unknown): string {
+  if (value === null || value === undefined) return "—"
+  if (typeof value === "string" && value.trim().length > 0) return value
+  if (typeof value === "number" || typeof value === "boolean") return String(value)
+  return "—"
+}
+
+function scoreBadgeVariant(score: unknown, malicious: unknown): "default" | "secondary" | "destructive" | "outline" {
+  const isMalicious = malicious === true
+  if (isMalicious) return "destructive"
+  if (typeof score === "number" && score >= 50) return "destructive"
+  if (typeof score === "number" && score > 0) return "secondary"
+  return "outline"
+}
+
 export default function Home() {
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "0x4AAAAAACp9k1gSv25NYbw7"
   const [url, setUrl] = useState("")
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<ScanResult | null>(null)
+  const [virusTotalResult, setVirusTotalResult] = useState<VirusTotalScanResult | null>(null)
+  const [urlscanSubmit, setUrlscanSubmit] = useState<UrlscanSubmitResponse | null>(null)
+  const [urlscanResult, setUrlscanResult] = useState<UrlscanResult | null>(null)
+  const [urlscanVisibility, setUrlscanVisibility] = useState<UrlscanVisibility>("public")
+  const [urlscanStatus, setUrlscanStatus] = useState("")
+  const [virusTotalError, setVirusTotalError] = useState("")
+  const [liveScanError, setLiveScanError] = useState("")
   const [error, setError] = useState("")
   const [darkMode, setDarkMode] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [turnstileScriptLoaded, setTurnstileScriptLoaded] = useState(false)
   const [turnstileToken, setTurnstileToken] = useState("")
   const widgetIdRef = useRef<string | null>(null)
+
+  const pollingRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     if (!turnstileScriptLoaded || !turnstileSiteKey || !window.turnstile || widgetIdRef.current) {
@@ -127,6 +178,60 @@ export default function Home() {
     }
   }
 
+  const resetResults = () => {
+    pollingRef.current?.abort()
+    pollingRef.current = null
+    setVirusTotalResult(null)
+    setUrlscanSubmit(null)
+    setUrlscanResult(null)
+    setUrlscanStatus("")
+    setVirusTotalError("")
+    setLiveScanError("")
+  }
+
+  const pollUrlscanResult = async (uuid: string) => {
+    pollingRef.current?.abort()
+    const controller = new AbortController()
+    pollingRef.current = controller
+
+    const maxAttempts = 30
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      if (controller.signal.aborted) return
+
+      try {
+        const response = await fetch(`/api/urlscan/result/${encodeURIComponent(uuid)}`, {
+          method: "GET",
+          signal: controller.signal,
+          headers: {
+            Accept: "application/json",
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setUrlscanResult(data)
+          setUrlscanStatus("Complete")
+          return
+        }
+
+        // 404 is common while urlscan is processing
+        if (response.status !== 404) {
+          const data = await response.json().catch(() => ({}))
+          throw new Error(data?.error || "Failed to fetch urlscan result")
+        }
+
+        setUrlscanStatus(`Processing… (${attempt + 1}/${maxAttempts})`)
+      } catch (err) {
+        if (controller.signal.aborted) return
+        throw err
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+    }
+
+    throw new Error("Timed out waiting for urlscan.io result. Please try again shortly.")
+  }
+
   const handleScan = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -147,26 +252,76 @@ export default function Home() {
 
     setLoading(true)
     setError("")
-    setResult(null)
+    resetResults()
 
     try {
       const normalizedUrl = normalizeUrl(url)
 
-      const response = await fetch("/api/scan", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ url: normalizedUrl, turnstileToken }),
-      })
+      const virusTotalTask = (async () => {
+        const response = await fetch("/api/scan", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ url: normalizedUrl, turnstileToken }),
+        })
 
-      const data = await response.json()
+        const data = await response.json()
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to scan URL")
+        if (!response.ok) {
+          throw new Error(data.error || "Primary scan failed")
+        }
+
+        setVirusTotalResult(data)
+      })()
+
+      const liveScanTask = (async () => {
+        setUrlscanStatus("Submitting…")
+        const response = await fetch("/api/urlscan/submit", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            url: normalizedUrl,
+            visibility: urlscanVisibility,
+            turnstileToken,
+          }),
+        })
+
+        const data = await response.json()
+
+        if (!response.ok) {
+          throw new Error(data.error || "Live scan submission failed")
+        }
+
+        setUrlscanSubmit(data)
+        const uuid = (data as UrlscanSubmitResponse).uuid
+        if (!uuid) {
+          throw new Error("Live scan did not return a uuid")
+        }
+
+        setUrlscanStatus("Queued")
+        await pollUrlscanResult(uuid)
+      })()
+
+      const [vtOutcome, liveOutcome] = await Promise.allSettled([virusTotalTask, liveScanTask])
+
+      const vtFailed = vtOutcome.status === "rejected"
+      const liveFailed = liveOutcome.status === "rejected"
+
+      if (vtFailed) {
+        setVirusTotalError(vtOutcome.reason instanceof Error ? vtOutcome.reason.message : "Primary scan failed")
       }
 
-      setResult(data)
+      if (liveFailed) {
+        setLiveScanError(liveOutcome.reason instanceof Error ? liveOutcome.reason.message : "Live scan failed")
+        setUrlscanStatus("")
+      }
+
+      if (vtFailed && liveFailed) {
+        setError("Both scans failed. Please try again.")
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An unexpected error occurred")
     } finally {
@@ -177,6 +332,12 @@ export default function Home() {
       }
     }
   }
+
+  useEffect(() => {
+    return () => {
+      pollingRef.current?.abort()
+    }
+  }, [])
 
   const getThreatColor = (level: string) => {
     switch (level) {
@@ -271,7 +432,7 @@ export default function Home() {
               Phishing URL Scanner
             </h1>
             <p className="text-gray-600 dark:text-gray-300 text-lg">
-              Analyze URLs for potential phishing threats using VirusTotal
+              Analyze URLs for potential phishing threats and preview how a site renders.
             </p>
           </div>
 
@@ -311,6 +472,22 @@ export default function Home() {
                   </Button>
                 </div>
 
+                <div className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-900/40 px-3 py-2">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm text-gray-900 dark:text-gray-100">Live Scan Visibility</Label>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Toggle private live scan.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Public</span>
+                    <Switch
+                      checked={urlscanVisibility === "private"}
+                      onCheckedChange={(checked) => setUrlscanVisibility(checked ? "private" : "public")}
+                      disabled={loading}
+                    />
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Private</span>
+                  </div>
+                </div>
+
                 <div className="flex justify-center">
                   <div id="turnstile-container" className="min-h-[65px]" />
                 </div>
@@ -326,13 +503,20 @@ export default function Home() {
           </Card>
 
           {/* Results */}
-          {result && (
+          {(virusTotalResult || virusTotalError) && (
             <div className="space-y-6 animate-fade-in">
+              {virusTotalError && (
+                <Alert className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/50 animate-scale-in">
+                  <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                  <AlertDescription className="text-red-800 dark:text-red-200">{virusTotalError}</AlertDescription>
+                </Alert>
+              )}
               {/* Main Results Card */}
-              <Card className="hover-lift animate-scale-in glass-effect bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-gray-200 dark:border-gray-700">
+              {virusTotalResult && (
+                <Card className="hover-lift animate-scale-in glass-effect bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-gray-200 dark:border-gray-700">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                    {getThreatIcon(result.threatLevel)}
+                    {getThreatIcon(virusTotalResult.threatLevel)}
                     Scan Results
                   </CardTitle>
                 </CardHeader>
@@ -340,38 +524,39 @@ export default function Home() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
                       <label className="text-sm font-medium text-gray-500 dark:text-gray-400">URL</label>
-                      <p className="text-sm break-all font-mono text-gray-900 dark:text-gray-100">{result.url}</p>
+                      <p className="text-sm break-all font-mono text-gray-900 dark:text-gray-100">{virusTotalResult.url}</p>
                     </div>
                     <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
                       <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Threat Level</label>
-                      <p className={`text-sm font-semibold capitalize ${getThreatColor(result.threatLevel)}`}>
-                        {result.threatLevel}
+                      <p className={`text-sm font-semibold capitalize ${getThreatColor(virusTotalResult.threatLevel)}`}>
+                        {virusTotalResult.threatLevel}
                       </p>
                     </div>
                     <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
                       <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Detection Ratio</label>
                       <p className="text-sm text-gray-900 dark:text-gray-100">
-                        <span className="font-bold text-lg">{result.positives}</span> / {result.total} engines detected
+                        <span className="font-bold text-lg">{virusTotalResult.positives}</span> / {virusTotalResult.total} engines detected
                         threats
                       </p>
                     </div>
                     <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
                       <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Scan Date</label>
-                      <p className="text-sm text-gray-900 dark:text-gray-100">{result.scanDate}</p>
+                      <p className="text-sm text-gray-900 dark:text-gray-100">{virusTotalResult.scanDate}</p>
                     </div>
                   </div>
 
-                  {result.details && (
+                  {virusTotalResult.details && (
                     <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
                       <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Details</label>
-                      <p className="text-sm text-gray-700 dark:text-gray-300">{result.details}</p>
+                      <p className="text-sm text-gray-700 dark:text-gray-300">{virusTotalResult.details}</p>
                     </div>
                   )}
                 </CardContent>
               </Card>
+              )}
 
               {/* RDAP Information */}
-              {result.rdap && (
+              {virusTotalResult?.rdap && (
                 <Card className="hover-lift animate-scale-in glass-effect bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-gray-200 dark:border-gray-700">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
@@ -382,12 +567,12 @@ export default function Home() {
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {[
-                        { label: "Domain", value: result.rdap.domain },
-                        { label: "Registrar", value: result.rdap.registrar },
-                        { label: "Organization", value: result.rdap.organization },
-                        { label: "Country", value: result.rdap.country },
-                        { label: "Creation Date", value: result.rdap.creation_date },
-                        { label: "Expiration Date", value: result.rdap.expiration_date },
+                        { label: "Domain", value: virusTotalResult.rdap.domain },
+                        { label: "Registrar", value: virusTotalResult.rdap.registrar },
+                        { label: "Organization", value: virusTotalResult.rdap.organization },
+                        { label: "Country", value: virusTotalResult.rdap.country },
+                        { label: "Creation Date", value: virusTotalResult.rdap.creation_date },
+                        { label: "Expiration Date", value: virusTotalResult.rdap.expiration_date },
                       ].map((item, index) => (
                         <div
                           key={index}
@@ -399,11 +584,11 @@ export default function Home() {
                       ))}
                     </div>
 
-                    {result.rdap.name_servers && result.rdap.name_servers.length > 0 && (
+                    {virusTotalResult.rdap.name_servers && virusTotalResult.rdap.name_servers.length > 0 && (
                       <div className="mt-4">
                         <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Name Servers</label>
                         <div className="mt-2 space-y-2">
-                          {result.rdap.name_servers.map((ns, index) => (
+                          {virusTotalResult.rdap.name_servers.map((ns, index) => (
                             <p
                               key={index}
                               className="text-sm bg-gray-50 dark:bg-gray-700/50 px-3 py-2 rounded-lg font-mono hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 text-gray-900 dark:text-gray-100"
@@ -415,11 +600,11 @@ export default function Home() {
                       </div>
                     )}
 
-                    {result.rdap.status && result.rdap.status.length > 0 && (
+                    {virusTotalResult.rdap.status && virusTotalResult.rdap.status.length > 0 && (
                       <div className="mt-4">
                         <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Domain Status</label>
                         <div className="mt-2 space-y-2">
-                          {result.rdap.status.map((status, index) => (
+                          {virusTotalResult.rdap.status.map((status, index) => (
                             <p
                               key={index}
                               className="text-sm bg-blue-50 dark:bg-blue-950/50 px-3 py-2 rounded-lg text-blue-800 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors duration-200"
@@ -435,17 +620,17 @@ export default function Home() {
               )}
 
               {/* Detailed Scan Results */}
-              {result.scans && Object.keys(result.scans).length > 0 && (
+              {virusTotalResult?.scans && Object.keys(virusTotalResult.scans).length > 0 && (
                 <Card className="hover-lift animate-scale-in glass-effect bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-gray-200 dark:border-gray-700">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
                       <Search className="h-5 w-5" />
-                      Detailed Scan Results ({Object.keys(result.scans).length} Engines)
+                      Detailed Scan Results ({Object.keys(virusTotalResult.scans).length} Engines)
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {Object.entries(result.scans).map(([engine, scan]) => (
+                      {Object.entries(virusTotalResult.scans).map(([engine, scan]) => (
                         <div
                           key={engine}
                           className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all duration-200 hover:scale-[1.01]"
@@ -468,6 +653,344 @@ export default function Home() {
                           </div>
                         </div>
                       ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {(urlscanSubmit || urlscanStatus || liveScanError) && (
+            <div className="space-y-6 animate-fade-in">
+              <Card className="hover-lift animate-scale-in glass-effect bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-gray-200 dark:border-gray-700">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
+                    <Shield className="h-5 w-5" />
+                    Live Scan Results
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {liveScanError && (
+                    <Alert className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/50 animate-scale-in">
+                      <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                      <AlertDescription className="text-red-800 dark:text-red-200">{liveScanError}</AlertDescription>
+                    </Alert>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
+                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Status</label>
+                      <p className="text-sm text-gray-900 dark:text-gray-100">{urlscanStatus || "—"}</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
+                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Visibility</label>
+                      <p className="text-sm text-gray-900 dark:text-gray-100 capitalize">{urlscanVisibility}</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
+                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">UUID</label>
+                      <p className="text-sm break-all font-mono text-gray-900 dark:text-gray-100">
+                        {urlscanSubmit?.uuid || "—"}
+                      </p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
+                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Result Link</label>
+                      {urlscanSubmit?.result ? (
+                        <a
+                          href={urlscanSubmit.result}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline transition-colors duration-200"
+                        >
+                          Open Full Report
+                        </a>
+                      ) : (
+                        <p className="text-sm text-gray-900 dark:text-gray-100">—</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {urlscanResult && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
+                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Scanned URL</label>
+                        <p className="text-sm break-all font-mono text-gray-900 dark:text-gray-100">
+                          {urlscanResult?.page?.url || url}
+                        </p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
+                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Domain</label>
+                        <p className="text-sm text-gray-900 dark:text-gray-100">{urlscanResult?.page?.domain || "—"}</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
+                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">IP</label>
+                        <p className="text-sm font-mono text-gray-900 dark:text-gray-100">{urlscanResult?.page?.ip || "—"}</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
+                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Country</label>
+                        <p className="text-sm text-gray-900 dark:text-gray-100">{urlscanResult?.page?.country || "—"}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {urlscanResult && (
+                    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-900/40 p-4">
+                      <Accordion type="multiple" className="w-full">
+                        <AccordionItem value="verdicts">
+                          <AccordionTrigger className="text-gray-900 dark:text-gray-100">Verdicts</AccordionTrigger>
+                          <AccordionContent>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              {(() => {
+                                const verdicts = urlscanResult?.verdicts
+                                if (!isRecord(verdicts)) {
+                                  return (
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">No verdict data available.</p>
+                                  )
+                                }
+
+                                const entries = Object.entries(verdicts)
+                                  .filter(([, v]) => isRecord(v))
+                                  .slice(0, 8)
+
+                                if (entries.length === 0) {
+                                  return (
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">No verdict data available.</p>
+                                  )
+                                }
+
+                                return entries.map(([name, v]) => (
+                                  <div
+                                    key={name}
+                                    className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 capitalize">
+                                        {name.replace(/_/g, " ")}
+                                      </p>
+                                      <Badge variant={scoreBadgeVariant(v.score, v.malicious)}>
+                                        {v.malicious === true ? "Malicious" : "OK"}
+                                      </Badge>
+                                    </div>
+                                    <div className="mt-2 grid grid-cols-2 gap-2">
+                                      <div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">Score</p>
+                                        <p className="text-sm text-gray-900 dark:text-gray-100">{toText(v.score)}</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">Categories</p>
+                                        <p className="text-sm text-gray-900 dark:text-gray-100">
+                                          {Array.isArray(v.categories) ? v.categories.slice(0, 3).join(", ") || "—" : "—"}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))
+                              })()}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+
+                        <AccordionItem value="technologies">
+                          <AccordionTrigger className="text-gray-900 dark:text-gray-100">Technologies</AccordionTrigger>
+                          <AccordionContent>
+                            {(() => {
+                              const apps =
+                                urlscanResult?.meta?.processors?.wappalyzer?.data?.applications ||
+                                urlscanResult?.meta?.processors?.wappa?.data?.applications ||
+                                urlscanResult?.meta?.processors?.wappalyzer?.data?.technologies ||
+                                urlscanResult?.meta?.processors?.wappa?.data?.technologies ||
+                                []
+
+                              const names: string[] = Array.isArray(apps)
+                                ? apps
+                                    .map((a: any) => (typeof a === "string" ? a : a?.name))
+                                    .filter((n: any) => typeof n === "string" && n.trim().length > 0)
+                                : []
+
+                              const deduped = Array.from(new Set(names)).slice(0, 30)
+
+                              return (
+                                <div className="space-y-3">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                                      <p className="text-xs text-gray-500 dark:text-gray-400">Server</p>
+                                      <p className="text-sm text-gray-900 dark:text-gray-100">{toText(urlscanResult?.page?.server)}</p>
+                                    </div>
+                                    <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                                      <p className="text-xs text-gray-500 dark:text-gray-400">ASN</p>
+                                      <p className="text-sm text-gray-900 dark:text-gray-100">{toText(urlscanResult?.page?.asn)}</p>
+                                    </div>
+                                  </div>
+
+                                  {deduped.length > 0 ? (
+                                    <div className="flex flex-wrap gap-2">
+                                      {deduped.map((name) => (
+                                        <Badge key={name} variant="secondary" className="bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                                          {name}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">No technology data available.</p>
+                                  )}
+                                </div>
+                              )
+                            })()}
+                          </AccordionContent>
+                        </AccordionItem>
+
+                        <AccordionItem value="requests">
+                          <AccordionTrigger className="text-gray-900 dark:text-gray-100">Network Requests</AccordionTrigger>
+                          <AccordionContent>
+                            {(() => {
+                              const requests = Array.isArray(urlscanResult?.data?.requests) ? urlscanResult.data.requests : []
+                              if (requests.length === 0) {
+                                return (
+                                  <p className="text-sm text-gray-600 dark:text-gray-400">No request data available.</p>
+                                )
+                              }
+
+                              const rows = requests.slice(0, 20)
+                              return (
+                                <ScrollArea className="h-80 rounded-md border border-gray-200 dark:border-gray-700">
+                                  <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                                    {rows.map((r: any, idx: number) => {
+                                      const method = r?.request?.method || r?.method
+                                      const reqUrl = r?.request?.url || r?.url
+                                      const status = r?.response?.status || r?.status
+                                      const mime = r?.response?.mimeType || r?.response?.type
+                                      return (
+                                        <div key={idx} className="p-3 bg-white/70 dark:bg-gray-900/40">
+                                          <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                              <Badge variant="outline" className="font-mono">
+                                                {toText(method)}
+                                              </Badge>
+                                              <Badge
+                                                variant={typeof status === "number" && status >= 400 ? "destructive" : "secondary"}
+                                                className="font-mono"
+                                              >
+                                                {toText(status)}
+                                              </Badge>
+                                            </div>
+                                            <span className="text-xs text-gray-500 dark:text-gray-400">{toText(mime)}</span>
+                                          </div>
+                                          <p className="mt-2 text-sm break-all font-mono text-gray-900 dark:text-gray-100">{toText(reqUrl)}</p>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </ScrollArea>
+                              )
+                            })()}
+                          </AccordionContent>
+                        </AccordionItem>
+
+                        <AccordionItem value="indicators">
+                          <AccordionTrigger className="text-gray-900 dark:text-gray-100">Extracted Indicators</AccordionTrigger>
+                          <AccordionContent>
+                            {(() => {
+                              const lists = urlscanResult?.lists
+                              const domains = asStringArray(lists?.domains).slice(0, 30)
+                              const ips = asStringArray(lists?.ips).slice(0, 30)
+                              const urls = asStringArray(lists?.urls).slice(0, 30)
+                              const links = asStringArray(urlscanResult?.data?.links).slice(0, 30)
+
+                              const hasAny = domains.length || ips.length || urls.length || links.length
+                              if (!hasAny) {
+                                return <p className="text-sm text-gray-600 dark:text-gray-400">No indicators available.</p>
+                              }
+
+                              return (
+                                <div className="space-y-4">
+                                  {domains.length > 0 && (
+                                    <div>
+                                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Domains</p>
+                                      <div className="flex flex-wrap gap-2">
+                                        {domains.map((d) => (
+                                          <Badge key={d} variant="outline" className="font-mono">
+                                            {d}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {ips.length > 0 && (
+                                    <div>
+                                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">IPs</p>
+                                      <div className="flex flex-wrap gap-2">
+                                        {ips.map((ip) => (
+                                          <Badge key={ip} variant="outline" className="font-mono">
+                                            {ip}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {urls.length > 0 && (
+                                    <div>
+                                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">URLs</p>
+                                      <ScrollArea className="h-48 rounded-md border border-gray-200 dark:border-gray-700">
+                                        <div className="p-3 space-y-2">
+                                          {urls.map((u) => (
+                                            <p key={u} className="text-xs break-all font-mono text-gray-900 dark:text-gray-100">
+                                              {u}
+                                            </p>
+                                          ))}
+                                        </div>
+                                      </ScrollArea>
+                                    </div>
+                                  )}
+
+                                  {links.length > 0 && (
+                                    <div>
+                                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Links</p>
+                                      <ScrollArea className="h-48 rounded-md border border-gray-200 dark:border-gray-700">
+                                        <div className="p-3 space-y-2">
+                                          {links.map((u) => (
+                                            <p key={u} className="text-xs break-all font-mono text-gray-900 dark:text-gray-100">
+                                              {u}
+                                            </p>
+                                          ))}
+                                        </div>
+                                      </ScrollArea>
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })()}
+                          </AccordionContent>
+                        </AccordionItem>
+                      </Accordion>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {urlscanSubmit?.uuid && (
+                <Card className="hover-lift animate-scale-in glass-effect bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-gray-200 dark:border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
+                      <Globe className="h-5 w-5" />
+                      Live Screenshot Preview
+                    </CardTitle>
+                    <CardDescription className="text-gray-600 dark:text-gray-400">
+                      Screenshot may take a few seconds to appear.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+                      <AspectRatio ratio={16 / 9}>
+                        <img
+                          src={
+                            urlscanResult?.task?.screenshotURL ||
+                            `https://urlscan.io/screenshots/${encodeURIComponent(urlscanSubmit.uuid)}.png`
+                          }
+                          alt="Live scan screenshot"
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      </AspectRatio>
                     </div>
                   </CardContent>
                 </Card>
