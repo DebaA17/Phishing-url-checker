@@ -6,7 +6,7 @@
 
 [![Netlify Status](https://api.netlify.com/api/v1/badges/f2313ce1-7cb4-43b4-a455-ea7313519993/deploy-status)](https://app.netlify.com/projects/phishing-url-checkcer/deploys)
 
-**Live Demo:** [urlcheck.debasisbiswas.me](https://urlcheck.debasisbiswas.me)
+**Live Demo:** [urlcheck.debasisbiswas.in](https://urlcheck.debasisbiswas.in)
 
 A modern web application to scan and detect phishing URLs. Built with Next.js, TypeScript, and Tailwind CSS.
 

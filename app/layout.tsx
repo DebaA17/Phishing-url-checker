@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   description:
     "Advanced AI-powered phishing URL scanner using VirusTotal API. Analyze URLs for potential threats, malware, and phishing attempts.",
   keywords: "phishing, URL scanner, security, malware detection, VirusTotal, cybersecurity",
-  authors: [{ name: "Debasis Biswas", url: "https://urlcheck.debasisbiswas.me" }],
+  authors: [{ name: "Debasis Biswas", url: "https://urlcheck.debasisbiswas.in" }],
   creator: "Debasis Biswas",
   publisher: "Debasis Biswas",
   robots: "index, follow",
