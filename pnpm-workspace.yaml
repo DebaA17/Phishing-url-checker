@@ -3,5 +3,7 @@ ignoredBuiltDependencies:
 overrides:
   lodash@<=4.17.23: '>=4.18.0'
   lodash@>=4.0.0 <=4.17.23: '>=4.18.0'
+  next@>=16.0.0-beta.0 <16.2.3: '>=16.2.3'
   picomatch@<2.3.2: '>=2.3.2'
   picomatch@>=4.0.0 <4.0.4: '>=4.0.4'
+  postcss@<8.5.10: '>=8.5.10'
