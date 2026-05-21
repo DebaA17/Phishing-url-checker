@@ -1,5 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server"
 
+type JsonRecord = Record<string, unknown>
+
+function isRecord(value: unknown): value is JsonRecord {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined
+}
+
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 15000) {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeout)
@@ -40,7 +50,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ uu
     )
 
     const text = await response.text()
-    let payload: any = null
+    let payload: unknown = null
     try {
       payload = text ? JSON.parse(text) : null
     } catch {
@@ -49,7 +59,11 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ uu
 
     if (!response.ok) {
       // urlscan often returns 404 while scan is still processing
-      const message = payload?.message || payload?.description || (response.status === 404 ? "Result not ready" : "Failed to fetch live scan result")
+      const payloadRecord = isRecord(payload) ? payload : null
+      const message =
+        asString(payloadRecord?.["message"]) ||
+        asString(payloadRecord?.["description"]) ||
+        (response.status === 404 ? "Result not ready" : "Failed to fetch live scan result")
       return NextResponse.json({ error: message }, { status: response.status })
     }
 

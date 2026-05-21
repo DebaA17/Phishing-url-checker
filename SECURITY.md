@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in this project, please report it by creating an issue or contacting the maintainer directly at forensic@debasisbiswas.me.
+If you discover a security vulnerability in this project, please report it by creating an issue or contacting the maintainer directly at security@debasisbiswas.in.
 
 - Do not disclose security issues publicly until they have been reviewed and patched.
 - Provide as much detail as possible to help reproduce and address the issue.
@@ -23,8 +23,8 @@ The key fingerprint is: `B521D1095C63E077EAE854E96805708F78A19272` — verify th
 ## Supported Versions
 
 | Version | Supported          |
-| ------- | ----------------- |
-| main    | :white_check_mark:|
+| ------- | ------------------ |
+| main    | :white_check_mark: |
 
 ## Security Updates
 

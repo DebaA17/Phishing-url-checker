@@ -1,42 +1,35 @@
 import { type NextRequest, NextResponse } from "next/server"
 
-
 // SSRF protection helper
 function isSafePublicDomain(hostname: string): boolean {
   // Block localhost, internal, and direct IP addresses
-  const forbidden = [
-    "localhost",
-    "127.0.0.1",
-    "::1",
-  ];
-  if (forbidden.includes(hostname)) return false;
+  const forbidden = ["localhost", "127.0.0.1", "::1"]
+  if (forbidden.includes(hostname)) return false
   // Block IPv4/IPv6 addresses (private ranges)
   // IPv4 regex
-  const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+  const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/
   if (ipv4.test(hostname)) {
-    const parts = hostname.split('.').map(Number);
+    const parts = hostname.split(".").map(Number)
     // private ranges: 10.x, 192.168.x, 172.16-31.x
     if (
       parts[0] === 10 ||
       (parts[0] === 192 && parts[1] === 168) ||
       (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31)
     ) {
-      return false;
+      return false
     }
     // loopback
-    if (parts[0] === 127) return false;
+    if (parts[0] === 127) return false
     // else, allow global IPv4 addresses (rare for domains, but could be ok)
   }
   // IPv6 check
-  if (/^[a-fA-F0-9:]+$/.test(hostname) && hostname.includes(':')) return false;
+  if (/^[a-fA-F0-9:]+$/.test(hostname) && hostname.includes(":")) return false
   // Basic domain name pattern (disallows single-label, TLD only, and underscores)
-  if (
-    !/^(?!\-)(?:[a-zA-Z0-9\-]{1,63}\.)+[a-zA-Z]{2,63}$/.test(hostname)
-  ) {
-    return false;
+  if (!/^(?!\-)(?:[a-zA-Z0-9\-]{1,63}\.)+[a-zA-Z]{2,63}$/.test(hostname)) {
+    return false
   }
   // If we got here, it's probably a public domain name
-  return true;
+  return true
 }
 
 interface VirusTotalResponse {
@@ -67,8 +60,29 @@ interface TurnstileVerificationResponse {
   "error-codes"?: string[]
 }
 
+type JsonRecord = Record<string, unknown>
+
+function isRecord(value: unknown): value is JsonRecord {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((entry): entry is string => typeof entry === "string")
+}
+
+function getVcardField(vcard: unknown, fieldName: string): unknown[] | null {
+  if (!Array.isArray(vcard)) return null
+  const field = vcard.find((entry) => Array.isArray(entry) && entry[0] === fieldName)
+  return Array.isArray(field) ? field : null
+}
+
 // Add timeout wrapper for fetch requests
-async function fetchWithTimeout(url: string, options: any = {}, timeout = 10000) {
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 10000) {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeout)
 
@@ -138,7 +152,8 @@ async function getRDAPInfo(domain: string): Promise<RDAPResponse | null> {
           return parseRDAPData(directData, hostname)
         }
       } catch (directError) {
-        const directErrorMessage = directError instanceof Error ? directError.message : String(directError)
+        const directErrorMessage =
+          directError instanceof Error ? directError.message : String(directError)
         console.warn("Direct RDAP API also failed:", directErrorMessage)
       }
 
@@ -166,14 +181,15 @@ async function getRDAPInfo(domain: string): Promise<RDAPResponse | null> {
       return null
     }
 
-    let data
+    let data: unknown
     try {
       data = JSON.parse(text)
-    } catch (parseError) {
+    } catch {
       console.warn("RDAP returned invalid JSON:", text.substring(0, 100))
       return null
     }
 
+    if (!isRecord(data)) return null
     return parseRDAPData(data, hostname)
   } catch (error) {
     console.error("RDAP lookup failed:", error)
@@ -181,22 +197,28 @@ async function getRDAPInfo(domain: string): Promise<RDAPResponse | null> {
   }
 }
 
-function parseRDAPData(data: any, hostname: string): RDAPResponse {
+function parseRDAPData(data: JsonRecord, hostname: string): RDAPResponse {
   console.log("Parsing RDAP data:", JSON.stringify(data, null, 2).substring(0, 500))
 
   // Handle different RDAP response formats
-  const domain = data.ldhName || data.unicodeName || hostname
+  const domain = asString(data["ldhName"]) || asString(data["unicodeName"]) || hostname
 
   // Extract registrar information
   let registrar = "Unknown"
-  if (data.entities) {
-    const registrarEntity = data.entities.find((entity: any) => entity.roles && entity.roles.includes("registrar"))
-    if (registrarEntity && registrarEntity.vcardArray) {
-      const vcard = registrarEntity.vcardArray[1]
-      const orgField = vcard.find((field: any) => field[0] === "org")
-      if (orgField) {
-        registrar = orgField[3]
-      }
+  const entities = Array.isArray(data["entities"]) ? data["entities"] : []
+  const registrarEntity = entities.find((entity) => {
+    if (!isRecord(entity)) return false
+    const roles = asStringArray(entity["roles"])
+    return roles.includes("registrar")
+  })
+  if (isRecord(registrarEntity)) {
+    const vcardArray = Array.isArray(registrarEntity["vcardArray"])
+      ? registrarEntity["vcardArray"]
+      : null
+    const vcard = vcardArray && Array.isArray(vcardArray[1]) ? vcardArray[1] : null
+    const orgField = getVcardField(vcard, "org")
+    if (orgField && typeof orgField[3] === "string") {
+      registrar = orgField[3]
     }
   }
 
@@ -204,43 +226,66 @@ function parseRDAPData(data: any, hostname: string): RDAPResponse {
   let creationDate = "Unknown"
   let expirationDate = "Unknown"
 
-  if (data.events) {
-    const registrationEvent = data.events.find((event: any) => event.eventAction === "registration")
-    const expirationEvent = data.events.find((event: any) => event.eventAction === "expiration")
-
-    if (registrationEvent) {
-      creationDate = new Date(registrationEvent.eventDate).toLocaleDateString()
-    }
-    if (expirationEvent) {
-      expirationDate = new Date(expirationEvent.eventDate).toLocaleDateString()
-    }
-  }
-
-  // Extract name servers
-  const nameServers = data.nameservers ? data.nameservers.map((ns: any) => ns.ldhName || ns.unicodeName) : []
-
-  // Extract status
-  const status = data.status || []
-
   // Extract organization and country
   let organization = "Unknown"
   let country = "Unknown"
 
-  if (data.entities) {
-    const registrantEntity = data.entities.find((entity: any) => entity.roles && entity.roles.includes("registrant"))
-    if (registrantEntity && registrantEntity.vcardArray) {
-      const vcard = registrantEntity.vcardArray[1]
-      const orgField = vcard.find((field: any) => field[0] === "org")
-      const countryField = vcard.find((field: any) => field[0] === "adr")
+  const registrantEntity = entities.find((entity) => {
+    if (!isRecord(entity)) return false
+    const roles = asStringArray(entity["roles"])
+    return roles.includes("registrant")
+  })
+  if (isRecord(registrantEntity)) {
+    const vcardArray = Array.isArray(registrantEntity["vcardArray"])
+      ? registrantEntity["vcardArray"]
+      : null
+    const vcard = vcardArray && Array.isArray(vcardArray[1]) ? vcardArray[1] : null
+    const orgField = getVcardField(vcard, "org")
+    const countryField = getVcardField(vcard, "adr")
 
-      if (orgField) {
-        organization = orgField[3]
-      }
-      if (countryField && countryField[3] && countryField[3][6]) {
-        country = countryField[3][6]
-      }
+    if (orgField && typeof orgField[3] === "string") {
+      organization = orgField[3]
+    }
+    const address = countryField && Array.isArray(countryField[3]) ? countryField[3] : null
+    if (address && typeof address[6] === "string") {
+      country = address[6]
     }
   }
+
+  const events = Array.isArray(data["events"]) ? data["events"] : []
+  const registrationEvent = events.find(
+    (event) => isRecord(event) && event["eventAction"] === "registration",
+  )
+  const expirationEvent = events.find(
+    (event) => isRecord(event) && event["eventAction"] === "expiration",
+  )
+
+  const registrationDate =
+    registrationEvent && isRecord(registrationEvent)
+      ? asString(registrationEvent["eventDate"])
+      : undefined
+  const expirationDateValue =
+    expirationEvent && isRecord(expirationEvent)
+      ? asString(expirationEvent["eventDate"])
+      : undefined
+
+  if (registrationDate) {
+    creationDate = new Date(registrationDate).toLocaleDateString()
+  }
+  if (expirationDateValue) {
+    expirationDate = new Date(expirationDateValue).toLocaleDateString()
+  }
+
+  const nameServers = Array.isArray(data["nameservers"])
+    ? data["nameservers"]
+        .map((ns) => {
+          if (!isRecord(ns)) return undefined
+          return asString(ns["ldhName"]) || asString(ns["unicodeName"])
+        })
+        .filter((ns): ns is string => typeof ns === "string")
+    : []
+
+  const status = asStringArray(data["status"])
 
   return {
     domain,
@@ -254,7 +299,24 @@ function parseRDAPData(data: any, hostname: string): RDAPResponse {
   }
 }
 
-async function logToTelegram(url: string, ip: string, userAgent: string, result: any) {
+type TelegramScanResult = {
+  url?: string
+  threatLevel?: string
+  positives?: number
+  total?: number
+  rdap?: {
+    organization?: string
+    country?: string
+    registrar?: string
+  } | null
+}
+
+async function logToTelegram(
+  url: string,
+  ip: string,
+  userAgent: string,
+  result: TelegramScanResult,
+) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN
   const userId = process.env.TELEGRAM_USER_ID
 
@@ -332,7 +394,7 @@ function getClientIP(request: NextRequest): string {
   }
 
   // Try to get IP from request object
-  const requestIP = (request as any).ip
+  const requestIP = (request as { ip?: string }).ip
   if (requestIP) {
     console.log(`IP found in request.ip: ${requestIP}`)
     return requestIP
@@ -342,7 +404,10 @@ function getClientIP(request: NextRequest): string {
   return "unknown"
 }
 
-function determineThreatLevel(positives: number, total: number): "safe" | "suspicious" | "malicious" | "unknown" {
+function determineThreatLevel(
+  positives: number,
+  total: number,
+): "safe" | "suspicious" | "malicious" | "unknown" {
   if (total === 0) return "unknown"
 
   const ratio = positives / total
@@ -377,7 +442,11 @@ function formatScanDate(dateString: string): string {
   }
 }
 
-async function verifyTurnstileToken(secret: string, token: string, remoteip?: string): Promise<boolean> {
+async function verifyTurnstileToken(
+  secret: string,
+  token: string,
+  remoteip?: string,
+): Promise<boolean> {
   const body = new URLSearchParams({
     secret,
     response: token,
@@ -452,7 +521,10 @@ export async function POST(request: NextRequest) {
     )
 
     if (!isTurnstileValid) {
-      return NextResponse.json({ error: "Turnstile verification failed. Please try again." }, { status: 403 })
+      return NextResponse.json(
+        { error: "Turnstile verification failed. Please try again." },
+        { status: 403 },
+      )
     }
 
     console.log(`Scan request from IP: ${clientIP}, User-Agent: ${userAgent}`)
@@ -529,7 +601,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Log to Telegram
-    await logToTelegram(url, clientIP, userAgent, result)
+    await logToTelegram(url, clientIP, userAgent, {
+      threatLevel: result.threatLevel,
+      positives: result.positives,
+      total: result.total,
+      rdap: result.rdap ?? null,
+    })
 
     return NextResponse.json(result)
   } catch (error) {

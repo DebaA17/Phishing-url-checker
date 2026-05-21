@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Image from "next/image"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
 export default function NotFound() {
@@ -41,31 +43,41 @@ export default function NotFound() {
       <h1 className="text-6xl font-bold mt-20 animate-glow">404</h1>
 
       <p className="msg">
-        <strong>Congratulations!</strong><br />
-        You’ve officially discovered a page that doesn’t exist.<br />
-        Even our astronaut is confused… and he's literally floating in space.
+        <strong>Congratulations!</strong>
+        <br />
+        You&apos;ve officially discovered a page that doesn&apos;t exist.
+        <br />
+        Even our astronaut is confused… and he&apos;s literally floating in space.
       </p>
 
-      <img
+      <Image
         className="astronaut"
         style={{ transform: `translate(${parallax.x}px, ${parallax.y}px)` }}
         src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTMxIiBoZWlnaHQ9IjUzMSIgdmlld0JveD0iMCAwIDUzMSA1MzEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZmlsbD0iI2ZmZiIgZD0iTTI2NS41IDQwOGMtNzguNCAwLTE0Mi41LTY0LjEtMTQyLjUtMTQyLjVTMTg3LjEgMTIzIDI2NS41IDEyM2M3OC40IDAgMTQyLjUgNjQuMSAxNDIuNSAxNDIuNXMtNjQuMSAxNDIuNS0xNDIuNSAxNDIuNXptMCAyMThjMTEzLjMgMCAyMDUtOTEuNyAyMDUtMjA1cy05MS43LTIwNS0yMDUtMjA1LTIwNSA5MS43LTIwNSAyMDUgOTEuNyAyMDUgMjA1IDIwNXoiLz48L3N2Zz4="
         alt="Astronaut"
+        width={150}
+        height={150}
+        unoptimized
       />
 
-      <img
+      <Image
         className="planet"
         style={{ transform: `translate(${parallax.x * 0.5}px, ${parallax.y * 0.5}px)` }}
         src="data:image/svg+xml;base64,PHN2ZyBoZWlnaHQ9IjQwMCIgd2lkdGg9IjQwMCIgdmlld0JveD0iMCAwIDUwMCA1MDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBmaWxsPSIjMzlhMGZmIiBjeD0iMjUwIiBjeT0iMjUwIiByPSIyMDAiLz48L3N2Zz4="
         alt="Planet"
+        width={300}
+        height={300}
+        unoptimized
       />
 
       <Button asChild className="btn mt-10 z-10">
-        <a href="/">Go Back Home</a>
+        <Link href="/">Go Back Home</Link>
       </Button>
 
       <style jsx global>{`
-        body { margin: 0; }
+        body {
+          margin: 0;
+        }
 
         .star {
           position: absolute;
@@ -77,18 +89,28 @@ export default function NotFound() {
         }
 
         @keyframes twinkle {
-          from { opacity: 0.3; }
-          to { opacity: 1; }
+          from {
+            opacity: 0.3;
+          }
+          to {
+            opacity: 1;
+          }
         }
 
         .animate-glow {
-          text-shadow: 0 0 20px #fff, 0 0 40px #0ff;
+          text-shadow:
+            0 0 20px #fff,
+            0 0 40px #0ff;
           animation: glow 2s infinite alternate;
         }
 
         @keyframes glow {
-          from { text-shadow: 0 0 10px #0ff; }
-          to { text-shadow: 0 0 30px #0ff; }
+          from {
+            text-shadow: 0 0 10px #0ff;
+          }
+          to {
+            text-shadow: 0 0 30px #0ff;
+          }
         }
 
         .astronaut {
@@ -100,9 +122,15 @@ export default function NotFound() {
         }
 
         @keyframes floaty {
-          0% { transform: translate(-50px, 0px) rotate(-6deg); }
-          50% { transform: translate(50px, -40px) rotate(6deg); }
-          100% { transform: translate(-50px, 0px) rotate(-6deg); }
+          0% {
+            transform: translate(-50px, 0px) rotate(-6deg);
+          }
+          50% {
+            transform: translate(50px, -40px) rotate(6deg);
+          }
+          100% {
+            transform: translate(-50px, 0px) rotate(-6deg);
+          }
         }
 
         .planet {
@@ -114,8 +142,12 @@ export default function NotFound() {
         }
 
         @keyframes slowspin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
         }
 
         .btn {
@@ -150,8 +182,13 @@ export default function NotFound() {
         }
 
         @keyframes float {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-20px); }
+          0%,
+          100% {
+            transform: translateY(0px);
+          }
+          50% {
+            transform: translateY(-20px);
+          }
         }
       `}</style>
     </div>

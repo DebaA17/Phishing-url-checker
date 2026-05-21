@@ -17,8 +17,8 @@ function isSnowfallSeason() {
 export default function SnowfallClient() {
   if (!isSnowfallSeason()) return null
   return (
-    <div style={{ pointerEvents: 'none', position: 'fixed', inset: 0, zIndex: 9999 }}>
-      <Snowfall color="#fff" snowflakeCount={120} style={{ width: '100vw', height: '100vh' }} />
+    <div style={{ pointerEvents: "none", position: "fixed", inset: 0, zIndex: 9999 }}>
+      <Snowfall color="#fff" snowflakeCount={120} style={{ width: "100vw", height: "100vh" }} />
     </div>
   )
 }

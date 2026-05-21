@@ -1,5 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server"
 
+type JsonRecord = Record<string, unknown>
+
+function isRecord(value: unknown): value is JsonRecord {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined
+}
+
 interface TurnstileVerificationResponse {
   success: boolean
   "error-codes"?: string[]
@@ -33,7 +43,11 @@ function isHttpUrl(rawUrl: string): boolean {
   }
 }
 
-async function verifyTurnstileToken(secret: string, token: string, remoteip?: string): Promise<boolean> {
+async function verifyTurnstileToken(
+  secret: string,
+  token: string,
+  remoteip?: string,
+): Promise<boolean> {
   const body = new URLSearchParams({
     secret,
     response: token,
@@ -87,7 +101,7 @@ function getClientIP(request: NextRequest): string {
     }
   }
 
-  const requestIP = (request as any).ip
+  const requestIP = (request as { ip?: string }).ip
   return requestIP || "unknown"
 }
 
@@ -129,7 +143,10 @@ export async function POST(request: NextRequest) {
     )
 
     if (!isTurnstileValid) {
-      return NextResponse.json({ error: "Turnstile verification failed. Please try again." }, { status: 403 })
+      return NextResponse.json(
+        { error: "Turnstile verification failed. Please try again." },
+        { status: 403 },
+      )
     }
 
     const submitResponse = await fetchWithTimeout(
@@ -149,7 +166,7 @@ export async function POST(request: NextRequest) {
     )
 
     const payloadText = await submitResponse.text()
-    let payload: any = null
+    let payload: unknown = null
     try {
       payload = payloadText ? JSON.parse(payloadText) : null
     } catch {
@@ -157,7 +174,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (!submitResponse.ok) {
-      const message = payload?.message || payload?.description || "Failed to submit live scan"
+      const payloadRecord = isRecord(payload) ? payload : null
+      const message =
+        asString(payloadRecord?.["message"]) ||
+        asString(payloadRecord?.["description"]) ||
+        "Failed to submit live scan"
       return NextResponse.json({ error: message }, { status: submitResponse.status })
     }
 

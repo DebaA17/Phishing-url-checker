@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 
-
 type UrlscanVisibility = "public" | "private" | "unlisted"
 
 interface TurnstileVerificationResponse {
@@ -29,6 +28,27 @@ interface RDAPResponse {
   status: string[]
   country: string
   organization: string
+}
+
+type JsonRecord = Record<string, unknown>
+
+function isRecord(value: unknown): value is JsonRecord {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((entry): entry is string => typeof entry === "string")
+}
+
+function getVcardField(vcard: unknown, fieldName: string): unknown[] | null {
+  if (!Array.isArray(vcard)) return null
+  const field = vcard.find((entry) => Array.isArray(entry) && entry[0] === fieldName)
+  return Array.isArray(field) ? field : null
 }
 
 // SSRF protection helper
@@ -95,11 +115,28 @@ function getClientIP(request: NextRequest): string {
     }
   }
 
-  const requestIP = (request as any).ip
+  const requestIP = (request as { ip?: string }).ip
   return requestIP || "unknown"
 }
 
-async function logToTelegram(url: string, ip: string, userAgent: string, result: any) {
+type TelegramScanResult = {
+  url?: string
+  threatLevel?: string
+  positives?: number
+  total?: number
+  rdap?: {
+    organization?: string
+    country?: string
+    registrar?: string
+  } | null
+}
+
+async function logToTelegram(
+  url: string,
+  ip: string,
+  userAgent: string,
+  result: TelegramScanResult,
+) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN
   const chatId = process.env.TELEGRAM_CHAT_ID || process.env.TELEGRAM_USER_ID
 
@@ -146,7 +183,11 @@ async function logToTelegram(url: string, ip: string, userAgent: string, result:
   }
 }
 
-async function verifyTurnstileToken(secret: string, token: string, remoteip?: string): Promise<boolean> {
+async function verifyTurnstileToken(
+  secret: string,
+  token: string,
+  remoteip?: string,
+): Promise<boolean> {
   const body = new URLSearchParams({
     secret,
     response: token,
@@ -176,7 +217,10 @@ async function verifyTurnstileToken(secret: string, token: string, remoteip?: st
   return data.success
 }
 
-function determineThreatLevel(positives: number, total: number): "safe" | "suspicious" | "malicious" | "unknown" {
+function determineThreatLevel(
+  positives: number,
+  total: number,
+): "safe" | "suspicious" | "malicious" | "unknown" {
   if (total === 0) return "unknown"
   const ratio = positives / total
   if (ratio === 0) return "safe"
@@ -209,46 +253,76 @@ function formatScanDate(dateString: string): string {
   }
 }
 
-function parseRDAPData(data: any, hostname: string): RDAPResponse {
-  const domain = data.ldhName || data.unicodeName || hostname
+function parseRDAPData(data: JsonRecord, hostname: string): RDAPResponse {
+  const domain = asString(data["ldhName"]) || asString(data["unicodeName"]) || hostname
 
   let registrar = "Unknown"
-  if (data.entities) {
-    const registrarEntity = data.entities.find((entity: any) => entity.roles && entity.roles.includes("registrar"))
-    if (registrarEntity && registrarEntity.vcardArray) {
-      const vcard = registrarEntity.vcardArray[1]
-      const orgField = vcard.find((field: any) => field[0] === "org")
-      if (orgField) registrar = orgField[3]
-    }
+  const entities = Array.isArray(data["entities"]) ? data["entities"] : []
+  const registrarEntity = entities.find((entity) => {
+    if (!isRecord(entity)) return false
+    const roles = asStringArray(entity["roles"])
+    return roles.includes("registrar")
+  })
+  if (isRecord(registrarEntity)) {
+    const vcardArray = Array.isArray(registrarEntity["vcardArray"])
+      ? registrarEntity["vcardArray"]
+      : null
+    const vcard = vcardArray && Array.isArray(vcardArray[1]) ? vcardArray[1] : null
+    const orgField = getVcardField(vcard, "org")
+    if (orgField && typeof orgField[3] === "string") registrar = orgField[3]
   }
 
   let creationDate = "Unknown"
   let expirationDate = "Unknown"
 
-  if (data.events) {
-    const registrationEvent = data.events.find((event: any) => event.eventAction === "registration")
-    const expirationEvent = data.events.find((event: any) => event.eventAction === "expiration")
+  const events = Array.isArray(data["events"]) ? data["events"] : []
+  const registrationEvent = events.find(
+    (event) => isRecord(event) && event["eventAction"] === "registration",
+  )
+  const expirationEvent = events.find(
+    (event) => isRecord(event) && event["eventAction"] === "expiration",
+  )
+  const registrationDate =
+    registrationEvent && isRecord(registrationEvent)
+      ? asString(registrationEvent["eventDate"])
+      : undefined
+  const expirationDateValue =
+    expirationEvent && isRecord(expirationEvent)
+      ? asString(expirationEvent["eventDate"])
+      : undefined
 
-    if (registrationEvent) creationDate = new Date(registrationEvent.eventDate).toLocaleDateString()
-    if (expirationEvent) expirationDate = new Date(expirationEvent.eventDate).toLocaleDateString()
-  }
+  if (registrationDate) creationDate = new Date(registrationDate).toLocaleDateString()
+  if (expirationDateValue) expirationDate = new Date(expirationDateValue).toLocaleDateString()
 
-  const nameServers = data.nameservers ? data.nameservers.map((ns: any) => ns.ldhName || ns.unicodeName) : []
-  const status = data.status || []
+  const nameServers = Array.isArray(data["nameservers"])
+    ? data["nameservers"]
+        .map((ns) => {
+          if (!isRecord(ns)) return undefined
+          return asString(ns["ldhName"]) || asString(ns["unicodeName"])
+        })
+        .filter((ns): ns is string => typeof ns === "string")
+    : []
+  const status = asStringArray(data["status"])
 
   let organization = "Unknown"
   let country = "Unknown"
 
-  if (data.entities) {
-    const registrantEntity = data.entities.find((entity: any) => entity.roles && entity.roles.includes("registrant"))
-    if (registrantEntity && registrantEntity.vcardArray) {
-      const vcard = registrantEntity.vcardArray[1]
-      const orgField = vcard.find((field: any) => field[0] === "org")
-      const countryField = vcard.find((field: any) => field[0] === "adr")
+  const registrantEntity = entities.find((entity) => {
+    if (!isRecord(entity)) return false
+    const roles = asStringArray(entity["roles"])
+    return roles.includes("registrant")
+  })
+  if (isRecord(registrantEntity)) {
+    const vcardArray = Array.isArray(registrantEntity["vcardArray"])
+      ? registrantEntity["vcardArray"]
+      : null
+    const vcard = vcardArray && Array.isArray(vcardArray[1]) ? vcardArray[1] : null
+    const orgField = getVcardField(vcard, "org")
+    const countryField = getVcardField(vcard, "adr")
 
-      if (orgField) organization = orgField[3]
-      if (countryField && countryField[3] && countryField[3][6]) country = countryField[3][6]
-    }
+    if (orgField && typeof orgField[3] === "string") organization = orgField[3]
+    const address = countryField && Array.isArray(countryField[3]) ? countryField[3] : null
+    if (address && typeof address[6] === "string") country = address[6]
   }
 
   return {
@@ -302,13 +376,14 @@ async function getRDAPInfo(domain: string): Promise<RDAPResponse | null> {
     const text = await response.text()
     if (!text || text.trim().length === 0) return null
 
-    let data: any
+    let data: unknown
     try {
       data = JSON.parse(text)
     } catch {
       return null
     }
 
+    if (!isRecord(data)) return null
     return parseRDAPData(data, hostname)
   } catch (error) {
     console.error("RDAP lookup failed:", error)
@@ -361,7 +436,10 @@ export async function POST(request: NextRequest) {
     )
 
     if (!isTurnstileValid) {
-      return NextResponse.json({ error: "Turnstile verification failed. Please try again." }, { status: 403 })
+      return NextResponse.json(
+        { error: "Turnstile verification failed. Please try again." },
+        { status: 403 },
+      )
     }
 
     // RDAP in parallel
@@ -449,7 +527,7 @@ export async function POST(request: NextRequest) {
       )
 
       const payloadText = await submitResponse.text()
-      let payload: any = null
+      let payload: unknown = null
       try {
         payload = payloadText ? JSON.parse(payloadText) : null
       } catch {
@@ -457,7 +535,11 @@ export async function POST(request: NextRequest) {
       }
 
       if (!submitResponse.ok) {
-        const message = payload?.message || payload?.description || "Failed to submit live scan"
+        const payloadRecord = isRecord(payload) ? payload : null
+        const message =
+          asString(payloadRecord?.["message"]) ||
+          asString(payloadRecord?.["description"]) ||
+          "Failed to submit live scan"
         return { submit: null, error: message }
       }
 
@@ -468,12 +550,20 @@ export async function POST(request: NextRequest) {
 
     const virusTotal = vtOutcome.status === "fulfilled" ? vtOutcome.value : null
     const virusTotalError =
-      vtOutcome.status === "rejected" ? (vtOutcome.reason instanceof Error ? vtOutcome.reason.message : "Primary scan failed") : null
+      vtOutcome.status === "rejected"
+        ? vtOutcome.reason instanceof Error
+          ? vtOutcome.reason.message
+          : "Primary scan failed"
+        : null
 
     const live =
       liveOutcome.status === "fulfilled"
         ? liveOutcome.value
-        : { submit: null, error: liveOutcome.reason instanceof Error ? liveOutcome.reason.message : "Live scan failed" }
+        : {
+            submit: null,
+            error:
+              liveOutcome.reason instanceof Error ? liveOutcome.reason.message : "Live scan failed",
+          }
 
     if (virusTotal) {
       // Fire and forget; do not block response.
@@ -488,6 +578,9 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("combined scan error:", error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 })
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Internal server error" },
+      { status: 500 },
+    )
   }
 }

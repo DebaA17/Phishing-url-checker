@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   description:
     "Advanced AI-powered phishing URL scanner using VirusTotal API. Analyze URLs for potential threats, malware, and phishing attempts.",
   keywords: "phishing, URL scanner, security, malware detection, VirusTotal, cybersecurity",
-  authors: [{ name: "Debasis Biswas", url: "https://urlcheck.debasisbiswas.in" }],
+  authors: [{ name: "Debasis Biswas", url: "https://urlchecker.debasisbiswas.in" }],
   creator: "Debasis Biswas",
   publisher: "Debasis Biswas",
   robots: "index, follow",
@@ -38,13 +38,9 @@ export const viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-};
+}
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body className={inter.className}>

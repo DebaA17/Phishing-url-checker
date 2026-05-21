@@ -5,7 +5,10 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev",
-    "lint": "next lint",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "start": "next start"
   },
   "dependencies": {
@@ -46,12 +49,12 @@
     "geist": "^1.5.1",
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",
-    "next": "16.2.2",
+    "next": "16.2.6",
     "next-themes": "latest",
-    "react": "^19.2.4",
+    "react": "^19.2.6",
     "react-confetti": "^6.4.0",
     "react-day-picker": "9.8.0",
-    "react-dom": "^19.2.4",
+    "react-dom": "^19.2.6",
     "react-hook-form": "^7.71.1",
     "react-resizable-panels": "^2.1.9",
     "react-snowfall": "^2.4.0",
@@ -68,9 +71,13 @@
     "@types/react": "^18.3.27",
     "@types/react-dom": "^18.3.7",
     "autoprefixer": "^10.4.23",
+    "eslint": "^9.6.0",
+    "eslint-config-next": "16.2.6",
+    "eslint-config-prettier": "^9.1.0",
     "postcss": "^8.5.6",
+    "prettier": "^3.6.2",
     "tailwindcss": "^3.4.19",
     "typescript": "^5.9.3"
   },
-  "packageManager": "pnpm@10.32.1+sha1.3d0200745a9faf35ca009ea7fde8d6592ff17c4c"
+  "packageManager": "pnpm@11.1.3+sha512.c85357fe17ca12dd23dd7071822666dfd7e3cb76fe214e3370b5ea2fb34f2a231185509b63e717f3cd0acb38dd3f8d82bcd5e8172400ae678b70ea4fbed0896d"
 }

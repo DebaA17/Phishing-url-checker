@@ -3,8 +3,19 @@
 import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
+import Image from "next/image"
 import Script from "next/script"
-import { Shield, AlertTriangle, CheckCircle, XCircle, Loader2, Search, Globe, Moon, Sun } from "lucide-react"
+import {
+  Shield,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  Loader2,
+  Search,
+  Globe,
+  Moon,
+  Sun,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,7 +23,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { AspectRatio } from "@/components/ui/aspect-ratio"
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -58,7 +74,52 @@ interface UrlscanSubmitResponse {
   message?: string
 }
 
-type UrlscanResult = any
+type UrlscanMetaProcessorData = {
+  applications?: unknown[]
+  technologies?: unknown[]
+}
+
+type UrlscanMetaProcessors = {
+  wappalyzer?: { data?: UrlscanMetaProcessorData }
+  wappa?: { data?: UrlscanMetaProcessorData }
+}
+
+type UrlscanResult = {
+  page?: {
+    ip?: string
+    country?: string
+    asnname?: string
+    asn?: string
+    domain?: string
+    url?: string
+    title?: string
+    server?: string
+  }
+  task?: {
+    url?: string
+    time?: string
+    country?: string
+  }
+  stats?: {
+    uniqIPs?: number
+    uniqCountries?: number
+    uniqDomains?: number
+    requests?: number
+  }
+  verdicts?: Record<string, unknown>
+  meta?: {
+    processors?: UrlscanMetaProcessors
+  }
+  data?: {
+    requests?: unknown[]
+    links?: unknown[]
+  }
+  lists?: {
+    domains?: unknown[]
+    ips?: unknown[]
+    urls?: unknown[]
+  }
+}
 
 interface CombinedScanResponse {
   virusTotal: VirusTotalScanResult | null
@@ -74,7 +135,11 @@ function asStringArray(value: unknown): string[] {
   return []
 }
 
-function isRecord(value: unknown): value is Record<string, any> {
+function asString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value)
 }
 
@@ -90,7 +155,10 @@ function toOptionalText(value: unknown): string | null {
   return t === "—" ? null : t
 }
 
-function scoreBadgeVariant(score: unknown, malicious: unknown): "default" | "secondary" | "destructive" | "outline" {
+function scoreBadgeVariant(
+  score: unknown,
+  malicious: unknown,
+): "default" | "secondary" | "destructive" | "outline" {
   const isMalicious = malicious === true
   if (isMalicious) return "destructive"
   if (typeof score === "number" && score >= 50) return "destructive"
@@ -101,7 +169,8 @@ function scoreBadgeVariant(score: unknown, malicious: unknown): "default" | "sec
 function statusBadgeVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
   const s = status.toLowerCase()
   if (s.includes("complete")) return "default"
-  if (s.includes("processing") || s.includes("queued") || s.includes("submitting")) return "secondary"
+  if (s.includes("processing") || s.includes("queued") || s.includes("submitting"))
+    return "secondary"
   if (s.includes("fail") || s.includes("error") || s.includes("timeout")) return "destructive"
   return "outline"
 }
@@ -122,7 +191,6 @@ export default function Home() {
   const [screenshotError, setScreenshotError] = useState(false)
   const [error, setError] = useState("")
   const [darkMode, setDarkMode] = useState(false)
-  const [mounted, setMounted] = useState(false)
   const [turnstileScriptLoaded, setTurnstileScriptLoaded] = useState(false)
   const [turnstileToken, setTurnstileToken] = useState("")
   const widgetIdRef = useRef<string | null>(null)
@@ -149,7 +217,6 @@ export default function Home() {
   }, [turnstileScriptLoaded, turnstileSiteKey])
 
   useEffect(() => {
-    setMounted(true)
     // Check for saved theme preference or default to system preference
     const savedTheme = localStorage.getItem("theme")
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -321,7 +388,9 @@ export default function Home() {
           try {
             await pollUrlscanResult(data.liveSubmit.uuid)
           } catch (pollErr) {
-            setLiveScanError(pollErr instanceof Error ? pollErr.message : "Failed to fetch live scan result")
+            setLiveScanError(
+              pollErr instanceof Error ? pollErr.message : "Failed to fetch live scan result",
+            )
             setUrlscanStatus("Timed out")
           }
         } else {
@@ -380,24 +449,6 @@ export default function Home() {
     }
   }
 
-  if (!mounted) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-900 dark:via-blue-900 dark:to-indigo-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="flex justify-center mb-4">
-            <div className="p-4 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full shadow-lg animate-pulse">
-              <Shield className="h-10 w-10 text-white" />
-            </div>
-          </div>
-          <div className="flex items-center justify-center gap-2 text-blue-600 dark:text-blue-400">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span className="text-lg font-medium">Loading Security Scanner...</span>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-900 dark:via-blue-900 dark:to-indigo-900 transition-all duration-500">
       <Script
@@ -417,7 +468,13 @@ export default function Home() {
               title="Sponsor on Buy Me a Coffee"
               aria-label="Sponsor on Buy Me a Coffee"
             >
-              <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="h-4 w-4"
+              >
                 <path d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" />
               </svg>
             </a>
@@ -482,21 +539,31 @@ export default function Home() {
                     disabled={loading || !url.trim()}
                     className="hover-lift transition-all duration-200 hover:scale-105 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
                   >
-                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                    {loading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Search className="h-4 w-4" />
+                    )}
                     {loading ? "Scanning..." : "Scan"}
                   </Button>
                 </div>
 
                 <div className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-900/40 px-3 py-2">
                   <div className="space-y-0.5">
-                    <Label className="text-sm text-gray-900 dark:text-gray-100">Live Scan Visibility</Label>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Toggle private live scan.</p>
+                    <Label className="text-sm text-gray-900 dark:text-gray-100">
+                      Live Scan Visibility
+                    </Label>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      Toggle private live scan.
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-600 dark:text-gray-400">Public</span>
                     <Switch
                       checked={urlscanVisibility === "private"}
-                      onCheckedChange={(checked) => setUrlscanVisibility(checked ? "private" : "public")}
+                      onCheckedChange={(checked) =>
+                        setUrlscanVisibility(checked ? "private" : "public")
+                      }
                       disabled={loading}
                     />
                     <span className="text-xs text-gray-600 dark:text-gray-400">Private</span>
@@ -511,7 +578,9 @@ export default function Home() {
               {error && (
                 <Alert className="mt-4 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/50 animate-scale-in">
                   <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                  <AlertDescription className="text-red-800 dark:text-red-200">{error}</AlertDescription>
+                  <AlertDescription className="text-red-800 dark:text-red-200">
+                    {error}
+                  </AlertDescription>
                 </Alert>
               )}
             </CardContent>
@@ -554,51 +623,71 @@ export default function Home() {
               {virusTotalError && (
                 <Alert className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/50 animate-scale-in">
                   <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                  <AlertDescription className="text-red-800 dark:text-red-200">{virusTotalError}</AlertDescription>
+                  <AlertDescription className="text-red-800 dark:text-red-200">
+                    {virusTotalError}
+                  </AlertDescription>
                 </Alert>
               )}
               {/* Main Results Card */}
               {virusTotalResult && (
                 <Card className="hover-lift animate-scale-in glass-effect bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-gray-200 dark:border-gray-700">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                    {getThreatIcon(virusTotalResult.threatLevel)}
-                    Scan Results
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
-                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">URL</label>
-                      <p className="text-sm break-all font-mono text-gray-900 dark:text-gray-100">{virusTotalResult.url}</p>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
+                      {getThreatIcon(virusTotalResult.threatLevel)}
+                      Scan Results
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
+                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          URL
+                        </label>
+                        <p className="text-sm break-all font-mono text-gray-900 dark:text-gray-100">
+                          {virusTotalResult.url}
+                        </p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
+                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          Threat Level
+                        </label>
+                        <p
+                          className={`text-sm font-semibold capitalize ${getThreatColor(virusTotalResult.threatLevel)}`}
+                        >
+                          {virusTotalResult.threatLevel}
+                        </p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
+                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          Detection Ratio
+                        </label>
+                        <p className="text-sm text-gray-900 dark:text-gray-100">
+                          <span className="font-bold text-lg">{virusTotalResult.positives}</span> /{" "}
+                          {virusTotalResult.total} engines detected threats
+                        </p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
+                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          Scan Date
+                        </label>
+                        <p className="text-sm text-gray-900 dark:text-gray-100">
+                          {virusTotalResult.scanDate}
+                        </p>
+                      </div>
                     </div>
-                    <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
-                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Threat Level</label>
-                      <p className={`text-sm font-semibold capitalize ${getThreatColor(virusTotalResult.threatLevel)}`}>
-                        {virusTotalResult.threatLevel}
-                      </p>
-                    </div>
-                    <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
-                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Detection Ratio</label>
-                      <p className="text-sm text-gray-900 dark:text-gray-100">
-                        <span className="font-bold text-lg">{virusTotalResult.positives}</span> / {virusTotalResult.total} engines detected
-                        threats
-                      </p>
-                    </div>
-                    <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
-                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Scan Date</label>
-                      <p className="text-sm text-gray-900 dark:text-gray-100">{virusTotalResult.scanDate}</p>
-                    </div>
-                  </div>
 
-                  {virusTotalResult.details && (
-                    <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
-                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Details</label>
-                      <p className="text-sm text-gray-700 dark:text-gray-300">{virusTotalResult.details}</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                    {virusTotalResult.details && (
+                      <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
+                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          Details
+                        </label>
+                        <p className="text-sm text-gray-700 dark:text-gray-300">
+                          {virusTotalResult.details}
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               )}
 
               {/* RDAP Information */}
@@ -624,31 +713,38 @@ export default function Home() {
                           key={index}
                           className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
                         >
-                          <label className="text-sm font-medium text-gray-500 dark:text-gray-400">{item.label}</label>
+                          <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                            {item.label}
+                          </label>
                           <p className="text-sm text-gray-900 dark:text-gray-100">{item.value}</p>
                         </div>
                       ))}
                     </div>
 
-                    {virusTotalResult.rdap.name_servers && virusTotalResult.rdap.name_servers.length > 0 && (
-                      <div className="mt-4">
-                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Name Servers</label>
-                        <div className="mt-2 space-y-2">
-                          {virusTotalResult.rdap.name_servers.map((ns, index) => (
-                            <p
-                              key={index}
-                              className="text-sm bg-gray-50 dark:bg-gray-700/50 px-3 py-2 rounded-lg font-mono hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 text-gray-900 dark:text-gray-100"
-                            >
-                              {ns}
-                            </p>
-                          ))}
+                    {virusTotalResult.rdap.name_servers &&
+                      virusTotalResult.rdap.name_servers.length > 0 && (
+                        <div className="mt-4">
+                          <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                            Name Servers
+                          </label>
+                          <div className="mt-2 space-y-2">
+                            {virusTotalResult.rdap.name_servers.map((ns, index) => (
+                              <p
+                                key={index}
+                                className="text-sm bg-gray-50 dark:bg-gray-700/50 px-3 py-2 rounded-lg font-mono hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 text-gray-900 dark:text-gray-100"
+                              >
+                                {ns}
+                              </p>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
                     {virusTotalResult.rdap.status && virusTotalResult.rdap.status.length > 0 && (
                       <div className="mt-4">
-                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Domain Status</label>
+                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          Domain Status
+                        </label>
                         <div className="mt-2 space-y-2">
                           {virusTotalResult.rdap.status.map((status, index) => (
                             <p
@@ -687,15 +783,23 @@ export default function Home() {
                             ) : (
                               <CheckCircle className="h-4 w-4 text-green-500 dark:text-green-400" />
                             )}
-                            <span className="font-medium text-sm text-gray-900 dark:text-gray-100">{engine}</span>
+                            <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                              {engine}
+                            </span>
                           </div>
                           <div className="text-right">
                             {scan.detected ? (
-                              <span className="text-red-600 dark:text-red-400 text-sm font-medium">{scan.result}</span>
+                              <span className="text-red-600 dark:text-red-400 text-sm font-medium">
+                                {scan.result}
+                              </span>
                             ) : (
-                              <span className="text-green-600 dark:text-green-400 text-sm font-medium">Clean</span>
+                              <span className="text-green-600 dark:text-green-400 text-sm font-medium">
+                                Clean
+                              </span>
                             )}
-                            <p className="text-xs text-gray-500 dark:text-gray-400">v{scan.version}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              v{scan.version}
+                            </p>
                           </div>
                         </div>
                       ))}
@@ -719,7 +823,9 @@ export default function Home() {
                       <Badge
                         variant={statusBadgeVariant(liveScanError ? "Error" : urlscanStatus || "—")}
                         className={
-                          !liveScanError && urlscanStatus && !urlscanStatus.toLowerCase().includes("complete")
+                          !liveScanError &&
+                          urlscanStatus &&
+                          !urlscanStatus.toLowerCase().includes("complete")
                             ? "animate-pulse"
                             : ""
                         }
@@ -733,33 +839,47 @@ export default function Home() {
                   {liveScanError && (
                     <Alert className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/50 animate-scale-in">
                       <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                      <AlertDescription className="text-red-800 dark:text-red-200">{liveScanError}</AlertDescription>
+                      <AlertDescription className="text-red-800 dark:text-red-200">
+                        {liveScanError}
+                      </AlertDescription>
                     </Alert>
                   )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
-                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Status</label>
+                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        Status
+                      </label>
                       <div className="mt-1 flex items-center gap-2">
                         {!urlscanResult && urlscanSubmit?.uuid && !liveScanError && (
                           <Loader2 className="h-4 w-4 animate-spin text-gray-500 dark:text-gray-300" />
                         )}
-                        <p className="text-sm text-gray-900 dark:text-gray-100">{urlscanStatus || "—"}</p>
+                        <p className="text-sm text-gray-900 dark:text-gray-100">
+                          {urlscanStatus || "—"}
+                        </p>
                       </div>
                     </div>
                     <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
-                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Visibility</label>
-                      <p className="text-sm text-gray-900 dark:text-gray-100 capitalize">{urlscanVisibility}</p>
+                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        Visibility
+                      </label>
+                      <p className="text-sm text-gray-900 dark:text-gray-100 capitalize">
+                        {urlscanVisibility}
+                      </p>
                     </div>
                   </div>
 
                   {urlscanResult && (
                     <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-900/40 p-4 space-y-4">
                       {(() => {
-                        const stats = isRecord(urlscanResult?.stats) ? urlscanResult.stats : null
-                        const uniqIps = typeof stats?.uniqIPs === "number" ? stats.uniqIPs : undefined
-                        const uniqCountries = typeof stats?.uniqCountries === "number" ? stats.uniqCountries : undefined
-                        const uniqDomains = typeof stats?.uniqDomains === "number" ? stats.uniqDomains : undefined
-                        const requests = typeof stats?.requests === "number" ? stats.requests : undefined
+                        const stats = urlscanResult?.stats
+                        const uniqIps =
+                          typeof stats?.uniqIPs === "number" ? stats.uniqIPs : undefined
+                        const uniqCountries =
+                          typeof stats?.uniqCountries === "number" ? stats.uniqCountries : undefined
+                        const uniqDomains =
+                          typeof stats?.uniqDomains === "number" ? stats.uniqDomains : undefined
+                        const requests =
+                          typeof stats?.requests === "number" ? stats.requests : undefined
 
                         const ip = toOptionalText(urlscanResult?.page?.ip)
                         const country = toOptionalText(urlscanResult?.page?.country)
@@ -773,16 +893,31 @@ export default function Home() {
                         const scannerCountry = toOptionalText(urlscanResult?.page?.country)
                         const submitterCountry = toOptionalText(urlscanResult?.task?.country)
 
-                        const overallVerdict = isRecord(urlscanResult?.verdicts?.overall)
-                          ? urlscanResult.verdicts.overall
-                          : isRecord(urlscanResult?.verdicts?.urlscan)
-                            ? urlscanResult.verdicts.urlscan
+                        const verdicts =
+                          isRecord(urlscanResult) && isRecord(urlscanResult["verdicts"])
+                            ? (urlscanResult["verdicts"] as Record<string, unknown>)
                             : null
-                        const malicious = overallVerdict?.malicious
-                        const categories = Array.isArray(overallVerdict?.categories)
-                          ? overallVerdict.categories.filter((c: any) => typeof c === "string" && c.trim().length > 0)
+                        const overallVerdict =
+                          verdicts && isRecord(verdicts["overall"])
+                            ? (verdicts["overall"] as Record<string, unknown>)
+                            : verdicts && isRecord(verdicts["urlscan"])
+                              ? (verdicts["urlscan"] as Record<string, unknown>)
+                              : null
+                        const malicious = overallVerdict ? overallVerdict["malicious"] : undefined
+                        const categoriesValue = overallVerdict
+                          ? overallVerdict["categories"]
+                          : undefined
+                        const categories = Array.isArray(categoriesValue)
+                          ? categoriesValue.filter(
+                              (c): c is string => typeof c === "string" && c.trim().length > 0,
+                            )
                           : []
-                        const verdictText = malicious === true ? "Malicious" : categories.length > 0 ? categories[0] : "No classification"
+                        const verdictText =
+                          malicious === true
+                            ? "Malicious"
+                            : categories.length > 0
+                              ? categories[0]
+                              : "No classification"
 
                         const summaryBits: string[] = []
                         if (
@@ -792,12 +927,16 @@ export default function Home() {
                           typeof requests === "number"
                         ) {
                           summaryBits.push(
-                            `This website contacted ${uniqIps} IPs in ${uniqCountries} countries across ${uniqDomains} domains to perform ${requests} HTTP transactions.`
+                            `This website contacted ${uniqIps} IPs in ${uniqCountries} countries across ${uniqDomains} domains to perform ${requests} HTTP transactions.`,
                           )
                         }
                         if (ip) {
                           const location = country ? `, located in ${country}` : ""
-                          const owner = asnName ? ` and belongs to ${asnName}` : asn ? ` and belongs to ${asn}` : ""
+                          const owner = asnName
+                            ? ` and belongs to ${asnName}`
+                            : asn
+                              ? ` and belongs to ${asn}`
+                              : ""
                           summaryBits.push(`The main IP is ${ip}${location}${owner}.`)
                         }
                         if (domain) {
@@ -806,18 +945,27 @@ export default function Home() {
 
                         const liveRows: Array<{ label: string; value: string }> = []
                         liveRows.push({ label: "Verdict", value: verdictText })
-                        if (submittedUrl) liveRows.push({ label: "Submitted URL", value: submittedUrl })
-                        if (effectiveUrl) liveRows.push({ label: "Effective URL", value: effectiveUrl })
+                        if (submittedUrl)
+                          liveRows.push({ label: "Submitted URL", value: submittedUrl })
+                        if (effectiveUrl)
+                          liveRows.push({ label: "Effective URL", value: effectiveUrl })
                         if (time || submitterCountry || scannerCountry) {
-                          const parts = [time ? `On ${time}` : null, submitterCountry ? `from ${submitterCountry}` : null, scannerCountry ? `scanned in ${scannerCountry}` : null].filter(
-                            Boolean
-                          ) as string[]
-                          if (parts.length) liveRows.push({ label: "Submission", value: parts.join(" ") })
+                          const parts = [
+                            time ? `On ${time}` : null,
+                            submitterCountry ? `from ${submitterCountry}` : null,
+                            scannerCountry ? `scanned in ${scannerCountry}` : null,
+                          ].filter(Boolean) as string[]
+                          if (parts.length)
+                            liveRows.push({ label: "Submission", value: parts.join(" ") })
                         }
                         if (pageTitle) liveRows.push({ label: "Page Title", value: pageTitle })
                         if (domain) liveRows.push({ label: "Domain", value: domain })
                         if (ip) {
-                          const aRecord = asn ? `${ip} (${asn}${asnName ? ` • ${asnName}` : ""})` : asnName ? `${ip} (${asnName})` : ip
+                          const aRecord = asn
+                            ? `${ip} (${asn}${asnName ? ` • ${asnName}` : ""})`
+                            : asnName
+                              ? `${ip} (${asnName})`
+                              : ip
                           liveRows.push({ label: "Current DNS A record", value: aRecord })
                         }
 
@@ -825,28 +973,43 @@ export default function Home() {
                           <>
                             {summaryBits.length > 0 && (
                               <div>
-                                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Summary</p>
-                                <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{summaryBits.join(" ")}</p>
+                                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  Summary
+                                </p>
+                                <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                                  {summaryBits.join(" ")}
+                                </p>
                               </div>
                             )}
 
                             <div>
                               <div className="flex items-center justify-between gap-3">
-                                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Live information</p>
-                                <Badge variant={scoreBadgeVariant(overallVerdict?.score, overallVerdict?.malicious)}>
+                                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  Live information
+                                </p>
+                                <Badge
+                                  variant={scoreBadgeVariant(
+                                    overallVerdict?.score,
+                                    overallVerdict?.malicious,
+                                  )}
+                                >
                                   {verdictText}
                                 </Badge>
                               </div>
                               <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
                                 {liveRows
-                                  .filter((r) => typeof r.value === "string" && r.value.trim().length > 0)
+                                  .filter(
+                                    (r) => typeof r.value === "string" && r.value.trim().length > 0,
+                                  )
                                   .slice(0, 8)
                                   .map((row) => (
                                     <div
                                       key={row.label}
                                       className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
                                     >
-                                      <p className="text-xs text-gray-500 dark:text-gray-400">{row.label}</p>
+                                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        {row.label}
+                                      </p>
                                       <p
                                         className={
                                           row.label.toLowerCase().includes("url")
@@ -866,57 +1029,78 @@ export default function Home() {
                     </div>
                   )}
 
-                  {urlscanSubmit?.uuid && !urlscanResult && !liveScanError && urlscanStatus !== "Timed out" && (
-                    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-900/40 p-4">
-                      <div className="flex items-center justify-between gap-3 mb-3">
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Fetching details…</p>
-                          <p className="text-xs text-gray-600 dark:text-gray-400">This usually finishes in a few seconds.</p>
+                  {urlscanSubmit?.uuid &&
+                    !urlscanResult &&
+                    !liveScanError &&
+                    urlscanStatus !== "Timed out" && (
+                      <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-900/40 p-4">
+                        <div className="flex items-center justify-between gap-3 mb-3">
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                              Fetching details…
+                            </p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400">
+                              This usually finishes in a few seconds.
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="font-mono">
+                            {urlscanVisibility}
+                          </Badge>
                         </div>
-                        <Badge variant="outline" className="font-mono">
-                          {urlscanVisibility}
-                        </Badge>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                            <Skeleton className="h-3 w-24" />
+                            <Skeleton className="mt-2 h-4 w-5/6" />
+                          </div>
+                          <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                            <Skeleton className="h-3 w-28" />
+                            <Skeleton className="mt-2 h-4 w-2/3" />
+                          </div>
+                          <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                            <Skeleton className="h-3 w-20" />
+                            <Skeleton className="mt-2 h-4 w-1/2" />
+                          </div>
+                          <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                            <Skeleton className="h-3 w-24" />
+                            <Skeleton className="mt-2 h-4 w-1/3" />
+                          </div>
+                        </div>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
-                          <Skeleton className="h-3 w-24" />
-                          <Skeleton className="mt-2 h-4 w-5/6" />
-                        </div>
-                        <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
-                          <Skeleton className="h-3 w-28" />
-                          <Skeleton className="mt-2 h-4 w-2/3" />
-                        </div>
-                        <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
-                          <Skeleton className="h-3 w-20" />
-                          <Skeleton className="mt-2 h-4 w-1/2" />
-                        </div>
-                        <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
-                          <Skeleton className="h-3 w-24" />
-                          <Skeleton className="mt-2 h-4 w-1/3" />
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                    )}
 
                   {urlscanResult && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
-                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Scanned URL</label>
+                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          Scanned URL
+                        </label>
                         <p className="text-sm break-all font-mono text-gray-900 dark:text-gray-100">
                           {urlscanResult?.page?.url || url}
                         </p>
                       </div>
                       <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
-                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Domain</label>
-                        <p className="text-sm text-gray-900 dark:text-gray-100">{urlscanResult?.page?.domain || "—"}</p>
+                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          Domain
+                        </label>
+                        <p className="text-sm text-gray-900 dark:text-gray-100">
+                          {urlscanResult?.page?.domain || "—"}
+                        </p>
                       </div>
                       <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
-                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">IP</label>
-                        <p className="text-sm font-mono text-gray-900 dark:text-gray-100">{urlscanResult?.page?.ip || "—"}</p>
+                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          IP
+                        </label>
+                        <p className="text-sm font-mono text-gray-900 dark:text-gray-100">
+                          {urlscanResult?.page?.ip || "—"}
+                        </p>
                       </div>
                       <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
-                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Country</label>
-                        <p className="text-sm text-gray-900 dark:text-gray-100">{urlscanResult?.page?.country || "—"}</p>
+                        <label className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                          Country
+                        </label>
+                        <p className="text-sm text-gray-900 dark:text-gray-100">
+                          {urlscanResult?.page?.country || "—"}
+                        </p>
                       </div>
                     </div>
                   )}
@@ -924,10 +1108,18 @@ export default function Home() {
                   {urlscanResult && (
                     <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-900/40 p-4">
                       {(() => {
-                        const verdicts = isRecord(urlscanResult?.verdicts) ? (urlscanResult.verdicts as Record<string, any>) : null
+                        const verdicts =
+                          isRecord(urlscanResult) && isRecord(urlscanResult["verdicts"])
+                            ? (urlscanResult["verdicts"] as Record<string, unknown>)
+                            : null
                         const verdictEntries = verdicts
                           ? Object.entries(verdicts)
-                              .filter(([, v]) => isRecord(v) && (typeof (v as any).score === "number" || typeof (v as any).malicious === "boolean"))
+                              .filter(([, v]) => {
+                                if (!isRecord(v)) return false
+                                const score = v["score"]
+                                const malicious = v["malicious"]
+                                return typeof score === "number" || typeof malicious === "boolean"
+                              })
                               .slice(0, 8)
                           : []
 
@@ -939,15 +1131,26 @@ export default function Home() {
                           []
                         const names: string[] = Array.isArray(apps)
                           ? apps
-                              .map((a: any) => (typeof a === "string" ? a : a?.name))
-                              .filter((n: any) => typeof n === "string" && n.trim().length > 0)
+                              .map((app) => {
+                                if (typeof app === "string") return app
+                                if (isRecord(app) && typeof app["name"] === "string") {
+                                  return app["name"]
+                                }
+                                return null
+                              })
+                              .filter(
+                                (name): name is string =>
+                                  typeof name === "string" && name.trim().length > 0,
+                              )
                           : []
                         const techDeduped = Array.from(new Set(names)).slice(0, 30)
                         const server = toOptionalText(urlscanResult?.page?.server)
                         const asn = toOptionalText(urlscanResult?.page?.asn)
                         const hasTech = techDeduped.length > 0 || !!server || !!asn
 
-                        const requests = Array.isArray(urlscanResult?.data?.requests) ? urlscanResult.data.requests : []
+                        const requests = Array.isArray(urlscanResult?.data?.requests)
+                          ? urlscanResult.data.requests
+                          : []
                         const requestRows = requests.slice(0, 20)
                         const hasRequests = requestRows.length > 0
 
@@ -956,49 +1159,74 @@ export default function Home() {
                         const ips = asStringArray(lists?.ips).slice(0, 30)
                         const urls = asStringArray(lists?.urls).slice(0, 30)
                         const links = asStringArray(urlscanResult?.data?.links).slice(0, 30)
-                        const hasIndicators = domains.length || ips.length || urls.length || links.length
+                        const hasIndicators =
+                          domains.length || ips.length || urls.length || links.length
 
-                        const showAccordion = verdictEntries.length > 0 || hasTech || hasRequests || hasIndicators
+                        const showAccordion =
+                          verdictEntries.length > 0 || hasTech || hasRequests || hasIndicators
                         if (!showAccordion) return null
 
                         return (
                           <Accordion type="multiple" className="w-full">
                             {verdictEntries.length > 0 && (
                               <AccordionItem value="verdicts">
-                                <AccordionTrigger className="text-gray-900 dark:text-gray-100">Verdicts</AccordionTrigger>
+                                <AccordionTrigger className="text-gray-900 dark:text-gray-100">
+                                  Verdicts
+                                </AccordionTrigger>
                                 <AccordionContent>
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {verdictEntries.map(([name, v]) => (
-                                      <div
-                                        key={name}
-                                        className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
-                                      >
-                                        <div className="flex items-center justify-between gap-2">
-                                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 capitalize">
-                                            {name.replace(/_/g, " ")}
-                                          </p>
-                                          <Badge variant={scoreBadgeVariant(v.score, v.malicious)}>
-                                            {v.malicious === true ? "Malicious" : "OK"}
-                                          </Badge>
+                                    {verdictEntries.map(([name, v]) => {
+                                      const verdict = isRecord(v) ? v : null
+                                      const score = verdict?.["score"]
+                                      const maliciousFlag = verdict?.["malicious"]
+                                      const categoriesValue = verdict?.["categories"]
+                                      const categoryList = Array.isArray(categoriesValue)
+                                        ? categoriesValue.filter(
+                                            (c): c is string =>
+                                              typeof c === "string" && c.trim().length > 0,
+                                          )
+                                        : []
+
+                                      return (
+                                        <div
+                                          key={name}
+                                          className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
+                                        >
+                                          <div className="flex items-center justify-between gap-2">
+                                            <p className="text-sm font-medium text-gray-900 dark:text-gray-100 capitalize">
+                                              {name.replace(/_/g, " ")}
+                                            </p>
+                                            <Badge
+                                              variant={scoreBadgeVariant(score, maliciousFlag)}
+                                            >
+                                              {maliciousFlag === true ? "Malicious" : "OK"}
+                                            </Badge>
+                                          </div>
+                                          <div className="mt-2 grid grid-cols-2 gap-2">
+                                            {typeof score !== "undefined" && (
+                                              <div>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                  Score
+                                                </p>
+                                                <p className="text-sm text-gray-900 dark:text-gray-100">
+                                                  {toText(score)}
+                                                </p>
+                                              </div>
+                                            )}
+                                            {categoryList.length > 0 && (
+                                              <div>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                  Categories
+                                                </p>
+                                                <p className="text-sm text-gray-900 dark:text-gray-100">
+                                                  {categoryList.slice(0, 3).join(", ")}
+                                                </p>
+                                              </div>
+                                            )}
+                                          </div>
                                         </div>
-                                        <div className="mt-2 grid grid-cols-2 gap-2">
-                                          {typeof v.score !== "undefined" && (
-                                            <div>
-                                              <p className="text-xs text-gray-500 dark:text-gray-400">Score</p>
-                                              <p className="text-sm text-gray-900 dark:text-gray-100">{toText(v.score)}</p>
-                                            </div>
-                                          )}
-                                          {Array.isArray(v.categories) && v.categories.length > 0 && (
-                                            <div>
-                                              <p className="text-xs text-gray-500 dark:text-gray-400">Categories</p>
-                                              <p className="text-sm text-gray-900 dark:text-gray-100">
-                                                {v.categories.slice(0, 3).join(", ")}
-                                              </p>
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    ))}
+                                      )
+                                    })}
                                   </div>
                                 </AccordionContent>
                               </AccordionItem>
@@ -1015,14 +1243,22 @@ export default function Home() {
                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         {server && (
                                           <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">Server</p>
-                                            <p className="text-sm text-gray-900 dark:text-gray-100">{server}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                              Server
+                                            </p>
+                                            <p className="text-sm text-gray-900 dark:text-gray-100">
+                                              {server}
+                                            </p>
                                           </div>
                                         )}
                                         {asn && (
                                           <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">ASN</p>
-                                            <p className="text-sm text-gray-900 dark:text-gray-100">{asn}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                              ASN
+                                            </p>
+                                            <p className="text-sm text-gray-900 dark:text-gray-100">
+                                              {asn}
+                                            </p>
                                           </div>
                                         )}
                                       </div>
@@ -1054,14 +1290,33 @@ export default function Home() {
                                 <AccordionContent>
                                   <ScrollArea className="h-80 rounded-md border border-gray-200 dark:border-gray-700">
                                     <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                                      {requestRows.map((r: any, idx: number) => {
-                                        const method = r?.request?.method || r?.method
-                                        const reqUrl = r?.request?.url || r?.url
-                                        const status = r?.response?.status || r?.status
-                                        const mime = r?.response?.mimeType || r?.response?.type
+                                      {requestRows.map((entry: unknown, idx: number) => {
+                                        const record = isRecord(entry) ? entry : null
+                                        const requestInfo =
+                                          record && isRecord(record["request"])
+                                            ? (record["request"] as Record<string, unknown>)
+                                            : null
+                                        const responseInfo =
+                                          record && isRecord(record["response"])
+                                            ? (record["response"] as Record<string, unknown>)
+                                            : null
+                                        const method =
+                                          asString(requestInfo?.["method"]) ||
+                                          asString(record?.["method"])
+                                        const reqUrl =
+                                          asString(requestInfo?.["url"]) ||
+                                          asString(record?.["url"])
+                                        const status =
+                                          responseInfo?.["status"] ?? record?.["status"]
+                                        const mime =
+                                          asString(responseInfo?.["mimeType"]) ||
+                                          asString(responseInfo?.["type"])
                                         if (!reqUrl) return null
                                         return (
-                                          <div key={idx} className="p-3 bg-white/70 dark:bg-gray-900/40">
+                                          <div
+                                            key={idx}
+                                            className="p-3 bg-white/70 dark:bg-gray-900/40"
+                                          >
                                             <div className="flex items-center justify-between gap-2">
                                               <div className="flex items-center gap-2">
                                                 {method && (
@@ -1071,16 +1326,26 @@ export default function Home() {
                                                 )}
                                                 {typeof status !== "undefined" && (
                                                   <Badge
-                                                    variant={typeof status === "number" && status >= 400 ? "destructive" : "secondary"}
+                                                    variant={
+                                                      typeof status === "number" && status >= 400
+                                                        ? "destructive"
+                                                        : "secondary"
+                                                    }
                                                     className="font-mono"
                                                   >
                                                     {toText(status)}
                                                   </Badge>
                                                 )}
                                               </div>
-                                              {mime && <span className="text-xs text-gray-500 dark:text-gray-400">{toText(mime)}</span>}
+                                              {mime && (
+                                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                  {toText(mime)}
+                                                </span>
+                                              )}
                                             </div>
-                                            <p className="mt-2 text-sm break-all font-mono text-gray-900 dark:text-gray-100">{toText(reqUrl)}</p>
+                                            <p className="mt-2 text-sm break-all font-mono text-gray-900 dark:text-gray-100">
+                                              {toText(reqUrl)}
+                                            </p>
                                           </div>
                                         )
                                       })}
@@ -1092,12 +1357,16 @@ export default function Home() {
 
                             {hasIndicators ? (
                               <AccordionItem value="indicators">
-                                <AccordionTrigger className="text-gray-900 dark:text-gray-100">Extracted Indicators</AccordionTrigger>
+                                <AccordionTrigger className="text-gray-900 dark:text-gray-100">
+                                  Extracted Indicators
+                                </AccordionTrigger>
                                 <AccordionContent>
                                   <div className="space-y-4">
                                     {domains.length > 0 && (
                                       <div>
-                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Domains</p>
+                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+                                          Domains
+                                        </p>
                                         <div className="flex flex-wrap gap-2">
                                           {domains.map((d) => (
                                             <Badge key={d} variant="outline" className="font-mono">
@@ -1110,10 +1379,16 @@ export default function Home() {
 
                                     {ips.length > 0 && (
                                       <div>
-                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">IPs</p>
+                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+                                          IPs
+                                        </p>
                                         <div className="flex flex-wrap gap-2">
                                           {ips.map((ipVal) => (
-                                            <Badge key={ipVal} variant="outline" className="font-mono">
+                                            <Badge
+                                              key={ipVal}
+                                              variant="outline"
+                                              className="font-mono"
+                                            >
                                               {ipVal}
                                             </Badge>
                                           ))}
@@ -1123,11 +1398,16 @@ export default function Home() {
 
                                     {urls.length > 0 && (
                                       <div>
-                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">URLs</p>
+                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+                                          URLs
+                                        </p>
                                         <ScrollArea className="h-48 rounded-md border border-gray-200 dark:border-gray-700">
                                           <div className="p-3 space-y-2">
                                             {urls.map((u) => (
-                                              <p key={u} className="text-xs break-all font-mono text-gray-900 dark:text-gray-100">
+                                              <p
+                                                key={u}
+                                                className="text-xs break-all font-mono text-gray-900 dark:text-gray-100"
+                                              >
                                                 {u}
                                               </p>
                                             ))}
@@ -1138,11 +1418,16 @@ export default function Home() {
 
                                     {links.length > 0 && (
                                       <div>
-                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Links</p>
+                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+                                          Links
+                                        </p>
                                         <ScrollArea className="h-48 rounded-md border border-gray-200 dark:border-gray-700">
                                           <div className="p-3 space-y-2">
                                             {links.map((u) => (
-                                              <p key={u} className="text-xs break-all font-mono text-gray-900 dark:text-gray-100">
+                                              <p
+                                                key={u}
+                                                className="text-xs break-all font-mono text-gray-900 dark:text-gray-100"
+                                              >
                                                 {u}
                                               </p>
                                             ))}
@@ -1204,7 +1489,9 @@ export default function Home() {
                                 </div>
                               ) : (
                                 <div className="text-center px-6">
-                                  <p className="text-sm text-gray-900 dark:text-gray-100 font-medium">Preview unavailable</p>
+                                  <p className="text-sm text-gray-900 dark:text-gray-100 font-medium">
+                                    Preview unavailable
+                                  </p>
                                   <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                                     Try refreshing in a few seconds.
                                   </p>
@@ -1213,11 +1500,14 @@ export default function Home() {
                             </div>
                           )}
 
-                          <img
+                          <Image
                             key={screenshotRefreshKey}
                             src={`/api/urlscan/screenshot/${encodeURIComponent(urlscanSubmit.uuid)}?t=${screenshotRefreshKey}`}
                             alt="Live scan screenshot"
-                            className={`h-full w-full object-cover relative transition-opacity duration-300 ${
+                            fill
+                            sizes="100vw"
+                            unoptimized
+                            className={`object-cover relative transition-opacity duration-300 ${
                               screenshotLoading || screenshotError ? "opacity-0" : "opacity-100"
                             }`}
                             loading="lazy"
@@ -1242,12 +1532,13 @@ export default function Home() {
           {/* Footer */}
           <div className="text-center mt-8 pt-8 border-t border-gray-200 dark:border-gray-700 animate-fade-in space-y-3">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Made by Debasis Biswas | contact@debasisbiswas.me
+              Made by Debasis Biswas | contact@debasisbiswas.in
             </p>
             <div className="text-xs text-gray-500 dark:text-gray-500 max-w-lg mx-auto leading-relaxed">
               <p className="mb-2">
-                <strong>Policy:</strong> This tool uses the VirusTotal Public API for educational and research purposes
-                only. It is not a replacement for antivirus software. All rights reserved by their respective owners.
+                <strong>Policy:</strong> This tool uses the VirusTotal Public API for educational
+                and research purposes only. It is not a replacement for antivirus software. All
+                rights reserved by their respective owners.
               </p>
               <p>
                 <a
