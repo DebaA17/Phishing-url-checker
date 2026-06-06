@@ -1530,36 +1530,56 @@ export default function Home() {
           )}
 
           {/* Footer */}
-          <div className="text-center mt-8 pt-8 border-t border-gray-200 dark:border-gray-700 animate-fade-in space-y-3">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Made by Debasis Biswas | contact@debasisbiswas.in
-            </p>
-            <div className="text-xs text-gray-500 dark:text-gray-500 max-w-lg mx-auto leading-relaxed">
-              <p className="mb-2">
-                <strong>Policy:</strong> This tool uses the VirusTotal Public API for educational
-                and research purposes only. It is not a replacement for antivirus software. All
-                rights reserved by their respective owners.
-              </p>
-              <p>
-                <a
-                  href="https://docs.virustotal.com/docs/api-overview"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline transition-colors duration-200"
-                >
-                  VirusTotal API Documentation
-                </a>
-              </p>
-              <p>
-                <a
-                  href="/privacy-policy"
-                  className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline transition-colors duration-200"
-                >
-                  Privacy Policy
-                </a>
-              </p>
+          <footer className="mt-12 pt-8 border-t border-gray-200 dark:border-gray-700 animate-fade-in space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left max-w-2xl mx-auto">
+              <div className="space-y-2.5">
+                <div className="flex items-center gap-2 text-gray-900 dark:text-gray-100 font-semibold text-sm">
+                  <Shield className="h-4 w-4 text-blue-600 dark:text-blue-400 animate-pulse" />
+                  <span>Phishing URL Scanner</span>
+                </div>
+                <p className="text-xs text-gray-650 dark:text-gray-450 leading-relaxed">
+                  A high-fidelity security scanner designed to inspect domains, detect suspicious
+                  redirects, and identify potential threat vectors. Please browse responsibly.
+                </p>
+              </div>
+
+              <div className="space-y-2.5 md:text-right md:flex md:flex-col md:items-end">
+                <div className="text-gray-900 dark:text-gray-100 font-semibold text-sm">
+                  Resources & Support
+                </div>
+                <div className="flex flex-wrap gap-x-3 gap-y-2 text-xs">
+                  <a
+                    href="/privacy-policy"
+                    className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline underline-offset-2 transition-colors duration-200"
+                  >
+                    Privacy Policy
+                  </a>
+                  <span className="text-gray-300 dark:text-gray-700 hidden md:inline">|</span>
+                  <a
+                    href="mailto:contact@debasisbiswas.in"
+                    className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline underline-offset-2 transition-colors duration-200"
+                  >
+                    Support & Contact
+                  </a>
+                  <span className="text-gray-300 dark:text-gray-700 hidden md:inline">|</span>
+                  <a
+                    href="https://buymeacoffee.com/debasisbiswas"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-pink-600 dark:text-pink-400 hover:text-pink-800 dark:hover:text-pink-300 underline underline-offset-2 transition-colors duration-200"
+                  >
+                    Sponsor
+                  </a>
+                </div>
+                <p className="text-[11px] text-gray-500 dark:text-gray-405">
+                  Made by Debasis Biswas • contact@debasisbiswas.in
+                </p>
+              </div>
             </div>
-          </div>
+            <div className="text-center pt-4 border-t border-gray-100 dark:border-gray-800/50 text-[11px] text-gray-400 dark:text-gray-500">
+              © {new Date().getFullYear()} Phishing URL Scanner. All rights reserved.
+            </div>
+          </footer>
         </div>
       </div>
     </div>
