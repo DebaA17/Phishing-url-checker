@@ -57,7 +57,7 @@ export default function PrivacyPolicyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground cyber-grid transition-colors duration-200">
+    <div className="min-h-screen flex flex-col bg-background text-foreground cyber-grid transition-colors duration-200">
       {/* Top Header */}
       <header className="sticky top-0 z-40 w-full border-b border-border/80 bg-background/90 backdrop-blur-md">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
@@ -84,7 +84,7 @@ export default function PrivacyPolicyPage() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-6">
+      <main className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-6">
         <Card className="border-border shadow-sm bg-card">
           <CardHeader className="border-b border-border/60 pb-6">
             <div className="flex items-center gap-3 mb-2">
@@ -184,7 +184,7 @@ export default function PrivacyPolicyPage() {
         </Card>
       </main>
 
-      <footer className="mt-12 py-6 border-t border-border text-center text-xs text-muted-foreground">
+      <footer className="mt-auto py-6 border-t border-border text-center text-xs text-muted-foreground">
         <p>© {new Date().getFullYear()} PhishGuard Security. All rights reserved.</p>
       </footer>
     </div>
