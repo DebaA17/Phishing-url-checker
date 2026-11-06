@@ -2,7 +2,20 @@
 
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
-import { Shield, ArrowLeft, Mail, Lock, Database, EyeOff, Calendar, Moon, Sun } from "lucide-react"
+import {
+  Shield,
+  ShieldCheck,
+  ArrowLeft,
+  Mail,
+  Lock,
+  Database,
+  EyeOff,
+  Calendar,
+  Moon,
+  Sun,
+  Server,
+  FileCheck,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -17,9 +30,11 @@ export default function PrivacyPolicyPage() {
 
     if (shouldUseDark) {
       document.documentElement.setAttribute("data-theme", "dark")
+      document.documentElement.classList.add("dark")
       document.body.classList.add("dark")
     } else {
       document.documentElement.removeAttribute("data-theme")
+      document.documentElement.classList.remove("dark")
       document.body.classList.remove("dark")
     }
   }, [])
@@ -30,152 +45,148 @@ export default function PrivacyPolicyPage() {
 
     if (newDarkMode) {
       document.documentElement.setAttribute("data-theme", "dark")
+      document.documentElement.classList.add("dark")
       document.body.classList.add("dark")
       localStorage.setItem("theme", "dark")
     } else {
       document.documentElement.removeAttribute("data-theme")
+      document.documentElement.classList.remove("dark")
       document.body.classList.remove("dark")
       localStorage.setItem("theme", "light")
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-900 dark:via-blue-900 dark:to-indigo-900 transition-all duration-500 py-12 px-4">
-      <div className="max-w-3xl mx-auto space-y-6">
-        {/* Navigation & Theme Toggle */}
-        <div className="flex justify-between items-center">
-          <Link href="/" passHref>
+    <div className="min-h-screen bg-background text-foreground cyber-grid transition-colors duration-200">
+      {/* Top Header */}
+      <header className="sticky top-0 z-40 w-full border-b border-border/80 bg-background/90 backdrop-blur-md">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+          <Link href="/" className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+            <ArrowLeft className="h-4 w-4" />
+            <span>Back to Security Scanner</span>
+          </Link>
+
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
-              size="sm"
-              className="flex items-center gap-2 hover-lift bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200"
+              size="icon"
+              onClick={toggleTheme}
+              className="h-9 w-9 rounded-md border-border bg-card hover:bg-muted"
             >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Scanner
+              {darkMode ? (
+                <Sun className="h-4 w-4 text-amber-400" />
+              ) : (
+                <Moon className="h-4 w-4 text-slate-700" />
+              )}
+              <span className="sr-only">Toggle theme</span>
             </Button>
-          </Link>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={toggleTheme}
-            className="hover-lift bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-gray-200 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-800"
-          >
-            {darkMode ? (
-              <Sun className="h-4 w-4 transition-transform duration-300 text-yellow-500" />
-            ) : (
-              <Moon className="h-4 w-4 transition-transform duration-300 text-blue-600" />
-            )}
-            <span className="sr-only">Toggle theme</span>
-          </Button>
+          </div>
         </div>
+      </header>
 
-        {/* Main Card */}
-        <Card className="hover-lift animate-scale-in glass-effect bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-gray-200 dark:border-gray-700 shadow-xl">
-          <CardHeader className="border-b border-gray-150 dark:border-gray-700 pb-6">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-6">
+        <Card className="border-border shadow-sm bg-card">
+          <CardHeader className="border-b border-border/60 pb-6">
             <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg text-blue-600 dark:text-blue-400">
-                <Lock className="h-6 w-6" />
+              <div className="h-10 w-10 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-500">
+                <Lock className="h-5 w-5" />
               </div>
               <div>
-                <CardTitle className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  Privacy Policy
+                <CardTitle className="text-2xl font-bold tracking-tight text-foreground">
+                  Privacy Policy & Data Security
                 </CardTitle>
-                <CardDescription className="text-gray-600 dark:text-gray-400 flex items-center gap-2 mt-1">
+                <CardDescription className="text-xs text-muted-foreground flex items-center gap-2 mt-1 font-mono">
                   <Calendar className="h-3.5 w-3.5" />
-                  <span>Last updated: June 6, 2026</span>
+                  <span>Last updated: November 2026</span>
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
 
-          <CardContent className="space-y-6 pt-6 text-gray-700 dark:text-gray-300">
-            <p className="leading-relaxed text-base">
-              We value your privacy and are committed to protecting your personal information. This
-              Privacy Policy explains what data we collect when you use the Phishing URL Scanner,
-              and how we handle and protect it.
+          <CardContent className="space-y-6 pt-6 text-foreground text-sm leading-relaxed">
+            <p className="text-muted-foreground">
+              PhishGuard is built for defensive cybersecurity research, triage, and threat mitigation.
+              This Privacy Policy explains what telemetry is collected when you submit URLs for verification,
+              how third-party scanning engines interact with queries, and how we protect confidentiality.
             </p>
 
             {/* Information We Collect */}
-            <div className="space-y-3">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                <Database className="h-5 w-5 text-indigo-500" />
-                Information We Collect
+            <div className="space-y-3 pt-2">
+              <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+                <Database className="h-4 w-4 text-sky-500" />
+                Information We Collect & Process
               </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                When you submit a URL for verification, the following minimal connection and search
-                parameters are logged:
+              <p className="text-xs text-muted-foreground">
+                When a scan is dispatched, the following telemetry is transmitted through our edge infrastructure:
               </p>
-              <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[
-                  "User IP address (for rate limiting & abuse detection)",
-                  "Device type and browser user-agent details",
-                  "Timestamp of the search execution",
-                  "The queried URL or domain address",
-                ].map((item, index) => (
-                  <li
-                    key={index}
-                    className="flex items-start gap-2.5 p-3 rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-150 dark:border-gray-800 text-sm"
-                  >
-                    <span className="h-2 w-2 rounded-full bg-blue-500 mt-1.5 shrink-0" />
-                    <span>{item}</span>
-                  </li>
+                  { title: "Submitted URL / Domain", desc: "Parsed and normalized for VirusTotal & urlscan.io queries." },
+                  { title: "Client IP Address", desc: "Retained ephemerally for rate limiting & automated abuse prevention." },
+                  { title: "Browser User-Agent", desc: "Evaluated to prevent bot scraping and brute-force traffic." },
+                  { title: "Verification Tokens", desc: "Cloudflare Turnstile cryptographically validates human requests." },
+                ].map((item, idx) => (
+                  <div key={idx} className="p-3 rounded-lg border border-border bg-muted/30">
+                    <p className="text-xs font-semibold text-foreground">{item.title}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{item.desc}</p>
+                  </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Third-Party Threat Engines */}
+            <div className="space-y-3 pt-2">
+              <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+                <Server className="h-4 w-4 text-emerald-500" />
+                Third-Party Security Vendors & Feeds
+              </h2>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                To provide comprehensive detection, your target URL is dispatched to:
+              </p>
+              <ul className="space-y-2 text-xs text-muted-foreground list-disc pl-5">
+                <li>
+                  <strong className="text-foreground">VirusTotal (Google Cloud):</strong> URLs are queried against 90+ antivirus and anti-phishing vendors.
+                </li>
+                <li>
+                  <strong className="text-foreground">urlscan.io:</strong> A headless Chromium browser navigates to the target page in an isolated sandbox. When Public Visibility is selected, results may be viewable in the public urlscan.io stream. When Private Visibility is selected, the scan remains unlisted.
+                </li>
               </ul>
             </div>
 
-            {/* Purpose of Data Collection */}
-            <div className="space-y-2.5">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                <Shield className="h-5 w-5 text-emerald-500" />
-                Purpose of Data Collection
+            {/* No Data Brokerage */}
+            <div className="space-y-2 pt-2">
+              <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+                <EyeOff className="h-4 w-4 text-rose-500" />
+                Zero Data Brokerage & Tracking
               </h2>
-              <p className="leading-relaxed text-sm">
-                The collected information is used solely for essential security operations. This
-                includes identifying automated abuse or scraping patterns, preventing malicious
-                payload injection, and refining the scanning algorithm. No profile tracking or
-                advertisement analytics are active.
-              </p>
-            </div>
-
-            {/* Data Sharing */}
-            <div className="space-y-2.5">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                <EyeOff className="h-5 w-5 text-rose-500" />
-                Data Sharing & Confidentiality
-              </h2>
-              <p className="leading-relaxed text-sm">
-                We strictly do <strong>not</strong> share, sell, or disclose your IP addresses or
-                history details to any third-party marketing networks or analytics providers. All
-                information resides securely on internal servers used strictly for standard security
-                assessment logs.
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                We do not sell, rent, or monetize your search history, IP addresses, or audited URLs. No cross-site marketing trackers, pixels, or third-party advertising cookies are present on this site.
               </p>
             </div>
 
             {/* Contact */}
-            <div className="pt-4 border-t border-gray-150 dark:border-gray-700 space-y-3">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                Contact & Inquiries
+            <div className="pt-4 border-t border-border space-y-2">
+              <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Mail className="h-4 w-4 text-sky-500" />
+                Security & Contact Inquiries
               </h2>
-              <p className="text-sm">
-                If you have questions regarding this privacy policy or wish to submit feedback,
-                please reach out to our security team:
+              <p className="text-xs text-muted-foreground">
+                For questions regarding data processing, security disclosures, or takedown requests, contact:
               </p>
               <a
-                href="mailto:security@debasisbiswas.in"
-                className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+                href="mailto:contact@debasisbiswas.in"
+                className="inline-flex items-center gap-1.5 text-xs font-mono font-medium text-sky-500 hover:text-sky-400 hover:underline"
               >
-                <Mail className="h-4 w-4" />
-                security@debasisbiswas.in
+                contact@debasisbiswas.in
               </a>
             </div>
           </CardContent>
         </Card>
+      </main>
 
-        {/* Footer */}
-        <div className="text-center text-xs text-gray-500 dark:text-gray-400 pt-4">
-          <p>© {new Date().getFullYear()} Phishing URL Scanner. All rights reserved.</p>
-        </div>
-      </div>
+      <footer className="mt-12 py-6 border-t border-border text-center text-xs text-muted-foreground">
+        <p>© {new Date().getFullYear()} PhishGuard Security. All rights reserved.</p>
+      </footer>
     </div>
   )
 }
