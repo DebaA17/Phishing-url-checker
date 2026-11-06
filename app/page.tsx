@@ -619,7 +619,7 @@ export default function Home() {
   }, [virusTotalResult?.threatLevel, parsedUrlscan?.malicious, parsedUrlscan?.score])
 
   return (
-    <div className="min-h-screen bg-background text-foreground cyber-grid transition-colors duration-200">
+    <div className="min-h-screen flex flex-col bg-background text-foreground cyber-grid transition-colors duration-200">
       <Script
         src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
         strategy="afterInteractive"
@@ -688,7 +688,7 @@ export default function Home() {
       </header>
 
       {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-8">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-8">
         {/* Hero Section */}
         <div className="max-w-3xl mx-auto text-center space-y-3">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-600 dark:text-sky-400 text-xs font-mono uppercase tracking-wider">
@@ -1750,7 +1750,7 @@ export default function Home() {
       </main>
 
       {/* Modern High-End Security Console Footer */}
-      <footer className="mt-20 border-t border-border bg-card/40 backdrop-blur-sm">
+      <footer className="mt-auto border-t border-border bg-card/40 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs">
             <div className="space-y-2">
